@@ -97,7 +97,7 @@ class MoneyValue:
         else:
             raise TypeError
 
-    def __div__(self, other: int | float):
+    def __truediv__(self, other: int | float):
         if not isinstance(other, int | float):
             raise TypeError
         return self * (1 / other)
@@ -112,6 +112,7 @@ class MoneyValue:
 @dataclasses.dataclass
 class InstrumentOperation:
     date: datetime.datetime
+    figi: str
     ticker: str
     instrument_type: InstrumentType
     instrument_name: str
@@ -122,9 +123,27 @@ class InstrumentOperation:
     price: MoneyValue
     payment: MoneyValue
 
+@dataclasses.dataclass
+class ConnectorRequest:
+    pass
+
+
+class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
+    begin_date: datetime.datetime | None
+    end_date: datetime.datetime | None
+    #account_ind: int - если реализовывать переключение между разными портфелями одного пользователя
+
+
+
+
 
 @dataclasses.dataclass
-class SharesPortfolioIntervalRequest:
+class AnalyzerRequest:
+    pass
+
+
+@dataclasses.dataclass
+class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     begin_date: datetime.datetime
     end_date: datetime.datetime
     operations: list[OperationType]
@@ -135,7 +154,7 @@ class SharesPortfolioIntervalRequest:
 
 
 @dataclasses.dataclass
-class SingleShareIntervalRequest:
+class SingleShareIntervalRequest(AnalyzerRequest):
     begin_date: datetime.datetime
     end_date: datetime.datetime
     operations: list[OperationType]
