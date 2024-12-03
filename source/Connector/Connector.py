@@ -31,3 +31,22 @@ class Connector:
                                    payment=MoneyValue(operation.payment.units, operation.payment.nano, curr))
 
 
+    def get_shares_operations_for_period(self, currency: Currency,
+                                  begin_date: datetime.datetime,
+                                  end_date: datetime.datetime,
+                                  account_index: int = 0) -> list[InstrumentOperation]:
+        #!!!Сейчас работает в режиме "операции в валюте currency", а не перевод операций к конкретной валюте
+        with Client(self.TOKEN) as client:
+            account_id = client.users.get_accounts().accounts[account_index].id
+
+            operations = [self.convert_t_api_operation(op) for op in
+                          client.operations.get_operations(account_id=account_id,
+                                                           from_=begin_date,
+                                                           to=end_date,
+                                                           state=OperationState.OPERATION_STATE_EXECUTED).operations
+                          if (op.instrument_type == "share" and
+                              op.currency == currency.value.lower() and
+                              op.state == schemas.OperationState.OPERATION_STATE_EXECUTED)
+                          ]
+
+        return operations
