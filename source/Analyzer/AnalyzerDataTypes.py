@@ -141,6 +141,25 @@ class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
 class AnalyzerRequest:
     pass
 
+@dataclasses.dataclass
+class AnalyzerResponse:
+    pass
+
+@dataclasses.dataclass
+class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
+    revenue_all_fifo: MoneyValue
+    revenue_all_lifo: MoneyValue
+    revenue_dividends: MoneyValue
+    revenue_without_dividends: MoneyValue
+    profit_all_xirr: MoneyValue
+    profit_without_dividends_xirr: MoneyValue
+    profit_dividends_xirr: MoneyValue
+    shares_grew: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+    shares_fell: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+
+
+
+
 
 @dataclasses.dataclass
 class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
