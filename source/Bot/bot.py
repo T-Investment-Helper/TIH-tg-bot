@@ -5,13 +5,14 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters.command import Command
-from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.enums import ParseMode
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from config_getter import config
 from encoder import token_encoder
 from dates import months, months_id, months_len
 from messages import start_msg, sign_in_msg, get_token_msg, help_msg, stats_msg, get_rqst_msg
+from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,7 +40,7 @@ async def cmd_start(message: types.Message):
                          reply_markup=builder.as_markup(resize_keyboard=True,
                                                         input_field_placeholder="Выбор за Вами...",
                                                         one_time_keyboard=True)
-    )
+                         )
 
 @dp.message(F.text, Command("help"))
 @dp.message(F.text.lower() == "помощь")
@@ -52,7 +53,7 @@ async def cmd_help(message: types.Message):
                          reply_markup=builder.as_markup(resize_keyboard=True,
                                                         input_field_placeholder="Выбор за Вами...",
                                                         one_time_keyboard=True)
-    )
+                         )
 
 class User(StatesGroup):
     id = State()
@@ -60,7 +61,7 @@ class User(StatesGroup):
 
 @dp.message(F.text, Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):
-    if state == FSMContext.default_state:
+    if state == default_state:
         await state.set_data({})
     else:
         await state.clear()
@@ -92,8 +93,10 @@ async def get_token(message: types.Message, state: FSMContext):
 class Request(StatesGroup):
     security_type = State()
     request_type = State()
+    start_year = State()
     start_month = State()
     start_date = State()
+    end_year = State()
     end_month = State()
     end_date = State()
 
@@ -116,9 +119,10 @@ async def get_request(message: types.Message, state: FSMContext):
     await state.update_data(security_type=message.text)
     await state.set_state(Request.request_type)
     builder = ReplyKeyboardBuilder()
-    builder.add(types.KeyboardButton(text="С открытия счёта"))
+    builder.add(types.KeyboardButton(text="С открытия счёта до текущей даты"))
+    builder.add(types.KeyboardButton(text="С открытия счёта до определённой даты"))
     builder.add(types.KeyboardButton(text="За определённый период"))
-    builder.adjust(1, 1)
+    builder.adjust(1, 1, 1)
     # TODO: add more request types
     await message.answer(get_rqst_msg,
                          reply_markup=builder.as_markup(resize_keyboard=True,
@@ -126,10 +130,10 @@ async def get_request(message: types.Message, state: FSMContext):
                                                         one_time_keyboard=True)
                          )
 
-@dp.message(F.text.lower() == "с открытия счёта")
-async def get_period_stats(message: types.Message, state: FSMContext):
+@dp.message(F.text.lower() == "с открытия счёта до текущей даты")
+async def get_total_stats(message: types.Message, state: FSMContext):
 
-    #TODO: form and process process request
+    #TODO: form and process request
 
     pass
 
