@@ -4,7 +4,7 @@ import enum
 from math import floor
 from typing import Self
 from tinkoff.invest import schemas
-
+import orjson
 
 class Currency(enum.Enum):
     NONE = ""
@@ -51,7 +51,7 @@ class OperationType(enum.Enum):
         if op == schemas.OperationType.OPERATION_TYPE_DIVIDEND:
             return cls.DIVIDENDS
 
-
+@dataclasses.dataclass
 class MoneyValue:
     def __init__(self, units: int, nano: int, curr: Currency):
         self.units = units
@@ -150,7 +150,7 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     # котировки акций - только для начального и конечного момента
     shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
-    currency_quotations: dict[str, list[MoneyValue]]
+    # currency_quotations: dict[str, list[MoneyValue]]
 
 
 @dataclasses.dataclass
