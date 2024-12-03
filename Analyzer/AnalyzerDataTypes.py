@@ -7,6 +7,7 @@ from tinkoff.invest import schemas
 
 
 class Currency(enum.Enum):
+    NONE = ""
     MIXED = ""
     RUB = "RUB"
     USD = "USD"
@@ -16,6 +17,7 @@ class InstrumentType(enum.Enum):
     SHARES = 0
     BONDS = 1
 
+    '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
     def from_t_api_instrument_type(cls, op: str):
         if op == "shares":
@@ -32,6 +34,8 @@ class OperationType(enum.Enum):
     OUTPUT = 3
     DIVIDENDS = 4
     COMMISSION = 5
+
+    '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
     def from_t_api_operation_type(cls, op: schemas.OperationType):
         if op == schemas.OperationType.OPERATION_TYPE_BUY:
@@ -65,6 +69,7 @@ class MoneyValue:
         units = floor(other)
         nano = round((other - floor(other)) ** (10 ** 9))
         return MoneyValue(units, nano, curr)
+
 
     def __add__(self, other: Self | int | float):
         if isinstance(other, MoneyValue):
@@ -110,10 +115,32 @@ class InstrumentOperation:
     ticker: str
     instrument_type: InstrumentType
     instrument_name: str
+    exchange_code: str
     operation_type: OperationType
     quantity: int
     currency: Currency
     price: MoneyValue
     payment: MoneyValue
 
+
+@dataclasses.dataclass
+class SharesPortfolioIntervalRequest:
+    begin_date: datetime.datetime
+    end_date: datetime.datetime
+    operations: list[OperationType]
+    # котировки акций - только для начального и конечного момента
+    shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
+    # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
+    currency_quotations: dict[str, list[MoneyValue]]
+
+
+@dataclasses.dataclass
+class SingleShareIntervalRequest:
+    begin_date: datetime.datetime
+    end_date: datetime.datetime
+    operations: list[OperationType]
+    # котировки акций - только для начального и конечного момента
+    shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
+    # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
+    currency_quotations: dict[str, list[MoneyValue]]
 
