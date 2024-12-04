@@ -12,7 +12,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from config_getter import config
 from encoder import token_encoder
 from dates import months, months_id, months_len
-from messages import start_msg, sign_in_msg, get_token_msg, help_msg, stats_msg, get_rqst_msg
+from messages import start_msg, sign_in_msg, get_confirm_msg, help_msg, stats_msg, get_rqst_msg
 # from request_former import form_request
 # from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest
 
@@ -60,6 +60,7 @@ async def cmd_help(message: types.Message):
 class User(StatesGroup):
     id = State()
     token = State()
+    confirmation = State()
 
 @dp.message(F.text, Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):
@@ -67,9 +68,15 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         await state.set_data({})
     else:
         await state.clear()
+    builder = ReplyKeyboardBuilder()
+    builder.add(types.KeyboardButton(text="Войти"))
+    builder.add(types.KeyboardButton(text="Статистика"))
+    builder.adjust(2)
     await message.reply(
         text="Действия отменены",
-        reply_markup=types.ReplyKeyboardRemove()
+        reply_markup=builder.as_markup(resize_keyboard=True,
+                                       input_field_placeholder="Выбор за Вами...",
+                                       one_time_keyboard=True)
     )
 
 @dp.message(F.text.lower() == "войти")
@@ -80,17 +87,43 @@ async def sign_in(message: types.Message, state: FSMContext):
 
 @dp.message(User.token, F.text)
 async def get_token(message: types.Message, state: FSMContext):
-    await state.update_data(token=message.text)
-
-    encoded_token = token_encoder.encode_token(message.text)
-    # TODO add (contact, encoded_token) to db
-
+    token = message.text
+    await state.update_data(token=token)
+    await state.set_state(User.confirmation)
     builder = ReplyKeyboardBuilder()
-    builder.add(types.KeyboardButton(text="Помощь"))
-    builder.add(types.KeyboardButton(text="Статистика"))
-    await message.reply(get_token_msg,
+    builder.add(types.KeyboardButton(text="Подтвердить"))
+    builder.add(types.KeyboardButton(text="Не подтверждать"))
+    builder.adjust(2)
+    await message.reply(f'''Подтвердите, пожалуйста, отправку токена {token}, нажав кнопку "Подтвердить" \
+или написав "Подтвердить" \(в любом регистре\)\.
+
+Обратите внимание, что это последний шанс стереть введённый токен, написав /cancel\! После \
+подтверждения зашифрованный токен будет внесён в базу данных, изменить его можно будет только \
+войдя заново\.''',
                         reply_markup=builder.as_markup(resize_keyboard=True))
-    await state.clear()
+
+@dp.message(User.confirmation, F.text)
+async def get_confirmation(message: types.Message, state: FSMContext):
+    if message.text.lower() == "подтвердить":
+        data = await state.get_data()
+        encoded_token = token_encoder.encode_token(data["token"])
+        # TODO add (contact, encoded_token) to db
+
+        builder = ReplyKeyboardBuilder()
+        builder.add(types.KeyboardButton(text="Помощь"))
+        builder.add(types.KeyboardButton(text="Статистика"))
+        await message.reply(get_confirm_msg,
+                            reply_markup=builder.as_markup(resize_keyboard=True))
+        await state.clear()
+    else:
+        builder = ReplyKeyboardBuilder()
+        builder.add(types.KeyboardButton(text="Подтвердить"))
+        builder.add(types.KeyboardButton(text="Не подтверждать"))
+        builder.adjust(2)
+        await message.reply(f'''Подтвердите, пожалуйста, отправку токена, нажав кнопку "Подтвердить" \
+        или написав "Подтвердить" \(в любом регистре\), или сотрите его, написав /cancel''',
+                            reply_markup=builder.as_markup(resize_keyboard=True))
+
 
 class Request(StatesGroup):
     security_type = State()
@@ -191,6 +224,7 @@ async def get_start_month(message: types.Message, state: FSMContext):
 
 @dp.message(Request.start_date, lambda message: message.text.isdigit())
 async def get_start_date(message: types.Message, state: FSMContext):
+    # TODO improve get_state
     date = await state.get_data()
     if 1 <= int(message.text) <= months_len[months[date["start_month"]]]:
         await state.update_data(start_date=int(message.text))
