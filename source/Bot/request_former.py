@@ -1,7 +1,7 @@
 import datetime
 from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest
 
-async def form_request(security_type: str, start_date, end_date):
+async def form_request(security_type: str, start_date=None, end_date=None):
     if start_date is not None:
         if start_date > datetime.date.today():
             start_date = datetime.date.today()
