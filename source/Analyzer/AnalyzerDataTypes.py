@@ -3,12 +3,43 @@ import datetime
 import enum
 from math import floor
 from typing import Self
+
 from tinkoff.invest import schemas
 import orjson
 
+def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
+    new_d = dict()
+    val = None
+    for f in dataclasses.fields(cls):
+        if isinstance(d[f.name], int):
+            val = d[f.name]
+        elif isinstance(d[f.name], str):
+            str_val = d[f.name]
+            if f.type == int:
+                val = int(str_val)
+            elif f.type == str:
+                val = str_val
+            elif f.type == datetime.datetime:
+                val = datetime.datetime.fromisoformat(str_val)
+            elif isinstance(f.type, enum.EnumType):
+                val = f.type[str_val]
+            elif "from_str" in dir(f.type):
+                val = f.type.from_str(str_val)
+        elif isinstance(d[f.name], dict):
+            dict_val = d[f.name]
+            # if f.type == dict:
+            #     val = dict_val
+            if "from_dict" in dir(f.type):
+                val = f.type.from_dict(dict_val)
+            else:
+                val = from_dict(f.type, dict_val)
+        new_d[f.name] = val
+    return cls(**new_d)
+
+
 class Currency(enum.Enum):
-    NONE = ""
-    MIXED = ""
+    NONE = "NONE"
+    MIXED = "MXD"
     RUB = "RUB"
     USD = "USD"
 
@@ -26,14 +57,13 @@ class InstrumentType(enum.Enum):
             return cls.BONDS
 
 
-
 class OperationType(enum.Enum):
-    BUY = 0
-    SELL = 1
-    INPUT = 2
-    OUTPUT = 3
-    DIVIDENDS = 4
-    COMMISSION = 5
+    BUY = "BUY"
+    SELL = "SELL"
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
+    DIVIDENDS = "DIVIDENDS"
+    COMMISSION = "COMMISSION"
 
     '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
@@ -50,6 +80,7 @@ class OperationType(enum.Enum):
             return cls.COMMISSION
         if op == schemas.OperationType.OPERATION_TYPE_DIVIDEND:
             return cls.DIVIDENDS
+
 
 @dataclasses.dataclass
 class MoneyValue:
@@ -68,6 +99,13 @@ class MoneyValue:
     def from_float(other: float, curr: Currency):
         units = floor(other)
         nano = round((other - floor(other)) ** (10 ** 9))
+        return MoneyValue(units, nano, curr)
+
+    @staticmethod
+    def from_dict(d: dict):
+        units = int(d["units"])
+        nano = int(d["nano"])
+        curr = Currency[d["curr"]]
         return MoneyValue(units, nano, curr)
 
 
@@ -108,7 +146,6 @@ class MoneyValue:
     def __repr__(self):
         return str(self)
 
-
 @dataclasses.dataclass
 class InstrumentOperation:
     date: datetime.datetime
@@ -122,6 +159,8 @@ class InstrumentOperation:
     currency: Currency
     price: MoneyValue
     payment: MoneyValue
+
+
 
 @dataclasses.dataclass
 class ConnectorRequest:
@@ -167,9 +206,11 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     end_date: datetime.datetime
     operations: list[OperationType]
     # котировки акций - только для начального и конечного момента
-    shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
+    shares_quotations_begin: dict[str, MoneyValue]
+    shares_quotations_end: dict[str, MoneyValue]
     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
     # currency_quotations: dict[str, list[MoneyValue]]
+
 
 
 @dataclasses.dataclass
