@@ -211,8 +211,8 @@ class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
     profit_all_xirr: MoneyValue
     profit_without_dividends_xirr: MoneyValue
     profit_dividends_xirr: MoneyValue
-    shares_grew: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
-    shares_fell: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+    shares_grew: tuple[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+    shares_fell: tuple[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
 
 
 
@@ -241,7 +241,3 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
 #     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
 #     currency_quotations: dict[str, list[MoneyValue]]
 
-l = dataclasses.fields(SharesPortfolioIntervalAnalyzerRequest)[2].type
-z = typing.get_args(tuple[MoneyValue])
-
-print(l)
