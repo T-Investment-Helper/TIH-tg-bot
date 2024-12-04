@@ -1,12 +1,15 @@
 import dataclasses
 import datetime
 import enum
+import typing
 from math import floor
 from typing import Self
 
 from tinkoff.invest import schemas
 import orjson
 
+#ВАЖНО!!! from_dict парсит ТОЛЬКО датаклассы со следующими ограничениями:
+#Поля должны быть dict, int, str, EnumType, или другой dataclass/tuple[dataclass]/dict[str, dataclass] такого же вида.
 def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
     new_d = dict()
     val = None
@@ -27,14 +30,25 @@ def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
                 val = f.type.from_str(str_val)
         elif isinstance(d[f.name], dict):
             dict_val = d[f.name]
-            # if f.type == dict:
-            #     val = dict_val
-            if "from_dict" in dir(f.type):
+            if typing.get_origin(f.type) == dict:
+                new_dict_val = dict()
+                for key, value in dict_val.items():
+                    new_dict_val[key] = from_dict(typing.get_args(f.type)[1], value)
+                val = new_dict_val
+            elif "from_dict" in dir(f.type):
                 val = f.type.from_dict(dict_val)
             else:
                 val = from_dict(f.type, dict_val)
+        elif isinstance(d[f.name], list):
+            tuple_val = d[f.name][:]
+            for i in range(len(tuple_val)):
+                tuple_val[i] = from_dict(typing.get_args(f.type)[0], d[f.name][i])
+            val = tuple(tuple_val)
         new_d[f.name] = val
     return cls(**new_d)
+
+
+# @dataclasses
 
 
 class Currency(enum.Enum):
@@ -45,15 +59,16 @@ class Currency(enum.Enum):
 
 
 class InstrumentType(enum.Enum):
-    SHARES = 0
-    BONDS = 1
+    SHARES = "SHARES"
+    BONDS = "BONDS"
+    NONE = "NONE"
 
     '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
     def from_t_api_instrument_type(cls, op: str):
-        if op == "shares":
+        if op == "share":
             return cls.SHARES
-        if op == "bonds":
+        if op == "bond":
             return cls.BONDS
 
 
@@ -84,6 +99,9 @@ class OperationType(enum.Enum):
 
 @dataclasses.dataclass
 class MoneyValue:
+    units: int
+    nano: int
+    curr: Currency
     def __init__(self, units: int, nano: int, curr: Currency):
         self.units = units
         self.nano = nano
@@ -166,7 +184,7 @@ class InstrumentOperation:
 class ConnectorRequest:
     pass
 
-
+@dataclasses.dataclass
 class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
     begin_date: datetime.datetime | None
     end_date: datetime.datetime | None
@@ -204,7 +222,7 @@ class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
 class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     begin_date: datetime.datetime
     end_date: datetime.datetime
-    operations: list[OperationType]
+    operations: tuple[InstrumentOperation]
     # котировки акций - только для начального и конечного момента
     shares_quotations_begin: dict[str, MoneyValue]
     shares_quotations_end: dict[str, MoneyValue]
@@ -213,13 +231,17 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
 
 
 
-@dataclasses.dataclass
-class SingleShareIntervalRequest(AnalyzerRequest):
-    begin_date: datetime.datetime
-    end_date: datetime.datetime
-    operations: list[OperationType]
-    # котировки акций - только для начального и конечного момента
-    shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
-    # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
-    currency_quotations: dict[str, list[MoneyValue]]
+# @dataclasses.dataclass
+# class SingleShareIntervalRequest(AnalyzerRequest):
+#     begin_date: datetime.datetime
+#     end_date: datetime.datetime
+#     operations: list[OperationType]
+#     # котировки акций - только для начального и конечного момента
+#     shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
+#     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
+#     currency_quotations: dict[str, list[MoneyValue]]
 
+l = dataclasses.fields(SharesPortfolioIntervalAnalyzerRequest)[2].type
+z = typing.get_args(tuple[MoneyValue])
+
+print(l)
