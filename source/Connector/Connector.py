@@ -2,12 +2,12 @@ import dataclasses
 import datetime
 import orjson
 
-from tinkoff.invest import services, schemas, Client, GetOperationsByCursorRequest, OperationState, CandleInterval
 
-import AnalyzerDataTypes
-from AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
-                               InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
-                               AnalyzerRequest, ConnectorRequest, from_dict)
+from tinkoff.invest import schemas, Client, OperationState, CandleInterval
+from ..Analyzer import AnalyzerDataTypes
+from ..Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
+                                         InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
+                                         AnalyzerRequest, ConnectorRequest, from_dict)
 
 def mv_from_t_api_mv(mv: schemas.MoneyValue):
     return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency])
