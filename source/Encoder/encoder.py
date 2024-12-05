@@ -1,5 +1,5 @@
 from cryptography.fernet import Fernet
-from config_getter import config
+from source.config_getter import config
 
 class Encoder:
     def __init__(self):
