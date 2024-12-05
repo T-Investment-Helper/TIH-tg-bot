@@ -12,7 +12,7 @@ async def form_request(security_type: str, start_date=None, end_date=None):
         if start_date > end_date:
             start_date, end_date = end_date, start_date
     if security_type == "акции":
-        request = SharesPortfolioIntervalConnectorRequest()
-        request.begin_date = start_date
-        request.end_date = end_date
+        request = SharesPortfolioIntervalConnectorRequest(begin_date=datetime.datetime.combine(start_date, datetime.datetime.min.time()),
+                                                          end_date=datetime.datetime.combine(end_date, datetime.datetime.min.time()),
+                                                          token_cypher="")
         return request
