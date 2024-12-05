@@ -1,10 +1,12 @@
 import dataclasses
 import datetime
 import orjson
+import os
+import pathlib
+
 
 
 from tinkoff.invest import schemas, Client, OperationState, CandleInterval
-from ..Analyzer import AnalyzerDataTypes
 from ..Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                          InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
                                          AnalyzerRequest, ConnectorRequest, from_dict)
@@ -13,6 +15,18 @@ def mv_from_t_api_mv(mv: schemas.MoneyValue):
     return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency])
 def mv_from_t_api_quotation(q: schemas.Quotation):
     return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
+
+def look_for_request():
+    while(True):
+        if len(os.listdir('.../connector_requests/connector_request')) != 0:
+            for p in pathlib.Path('.../connector_requests').iterdir():
+                with p.open() as f:
+                    req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(f.read()))
+                    Connector(SharesPortfolioIntervalConnectorRequest.token_cypher, req)
+
+
+
+
 
 class Connector:
     def __init__(self, TOKEN: str, request: ConnectorRequest):
@@ -44,13 +58,13 @@ class Connector:
 
     def send_data_to_analyzer(self):
         # serialize
-        with open("analyzer_request_test_2", 'wb') as file:
+        with open(".../analyzer_request", 'wb') as file:
             file.write(orjson.dumps(self.analyzer_request))
         return None
-        a = orjson.dumps(self.analyzer_request)
-
-        print(orjson.loads(a))
-        b = from_dict(self.analyzer_request.__class__, orjson.loads(a))
+        # a = orjson.dumps(self.analyzer_request)
+        #
+        # print(orjson.loads(a))
+        # b = from_dict(self.analyzer_request.__class__, orjson.loads(a))
 
         # send json TODO
 
@@ -158,3 +172,7 @@ class Connector:
 
 
 
+
+
+if __name__ == "__main__":
+    look_for_request()

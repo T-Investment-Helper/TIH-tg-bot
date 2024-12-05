@@ -3,7 +3,17 @@ import pyxirr
 from collections import defaultdict
 import datetime
 import copy
+import pathlib
+import os
 
+
+def look_for_request():
+    while(True):
+        if len(os.listdir('.../connector_requests/connector_request')) != 0:
+            for p in pathlib.Path('.../connector_requests').iterdir():
+                with p.open() as f:
+                    req = from_dict(SharesPortfolioIntervalAnalyzerRequest, orjson.loads(f.read()))
+                    Analyzer(req)
 
 class Analyzer:
     def __init__(self, request: AnalyzerRequest):
@@ -92,7 +102,11 @@ class Analyzer:
 
 
     def send_response(self):
-        with open("analyzer_response_test", "wb") as file:
+        with open(".../analyzer_responses/analyzer_response", "wb") as file:
             file.write(orjson.dumps(SharesPortfolioIntervalAnalyzerResponse(**self.response_data)))
 
 
+
+
+if __name__ == "__main__":
+    look_for_request()
