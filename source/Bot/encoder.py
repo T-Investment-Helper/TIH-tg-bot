@@ -9,6 +9,6 @@ class Encoder:
         return self.__f.encrypt(token.encode('utf-8'))
 
     def decode_token(self, encoded_token: bytes) -> str:
-        return self.__f.decrypt(encoded_token).dencode('utf-8')
+        return self.__f.decrypt(encoded_token).decode('utf-8')
 
 token_encoder = Encoder()
