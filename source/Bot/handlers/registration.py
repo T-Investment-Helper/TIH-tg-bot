@@ -3,7 +3,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from source.Bot.messages import sign_in_msg, get_confirm_msg
-from source.Bot.encoder import token_encoder
+from source.Encoder.encoder import token_encoder
+from source.Router.db_interaction import add_new_user
 
 router = Router()
 
@@ -39,8 +40,9 @@ async def get_token(message: types.Message, state: FSMContext):
 async def get_confirmation(message: types.Message, state: FSMContext):
     if message.text.lower() == "подтвердить":
         data = await state.get_data()
+
         encoded_token = token_encoder.encode_token(data["token"])
-        # TODO add (contact, encoded_token) to db
+        add_new_user(data["id"], encoded_token)
 
         builder = ReplyKeyboardBuilder()
         builder.add(types.KeyboardButton(text="Помощь"))
