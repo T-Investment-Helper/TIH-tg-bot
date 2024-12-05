@@ -9,13 +9,18 @@ from tinkoff.invest import schemas
 import orjson
 
 #ВАЖНО!!! from_dict парсит ТОЛЬКО датаклассы со следующими ограничениями:
-#Поля должны быть dict, int, str, EnumType, или другой dataclass/tuple[dataclass]/dict[str, dataclass] такого же вида.
+
+#Поля должны быть dict, int, str, EnumType, tuple[str] или другой dataclass/tuple[dataclass]/dict[str, dataclass] такого же вида.
+
 def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
     new_d = dict()
     val = None
     for f in dataclasses.fields(cls):
         if isinstance(d[f.name], int):
             val = d[f.name]
+        elif isinstance(d[f.name], float):
+            val = d[f.name]
+
         elif isinstance(d[f.name], str):
             str_val = d[f.name]
             if f.type == int:
@@ -41,9 +46,13 @@ def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
                 val = from_dict(f.type, dict_val)
         elif isinstance(d[f.name], list):
             tuple_val = d[f.name][:]
-            for i in range(len(tuple_val)):
-                tuple_val[i] = from_dict(typing.get_args(f.type)[0], d[f.name][i])
-            val = tuple(tuple_val)
+            if typing.get_args(f.type)[0] == str:
+                val = tuple(tuple_val)
+            else:
+                for i in range(len(tuple_val)):
+                    tuple_val[i] = from_dict(typing.get_args(f.type)[0], d[f.name][i])
+                val = tuple(tuple_val)
+
         new_d[f.name] = val
     return cls(**new_d)
 
@@ -79,6 +88,8 @@ class OperationType(enum.Enum):
     OUTPUT = "OUTPUT"
     DIVIDENDS = "DIVIDENDS"
     COMMISSION = "COMMISSION"
+    NOTFOUND = "NOTFOUND"
+
 
     '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
@@ -95,6 +106,8 @@ class OperationType(enum.Enum):
             return cls.COMMISSION
         if op == schemas.OperationType.OPERATION_TYPE_DIVIDEND:
             return cls.DIVIDENDS
+        return cls.NOTFOUND
+
 
 
 @dataclasses.dataclass
@@ -102,6 +115,7 @@ class MoneyValue:
     units: int
     nano: int
     curr: Currency
+
     def __init__(self, units: int, nano: int, curr: Currency):
         self.units = units
         self.nano = nano
@@ -116,7 +130,7 @@ class MoneyValue:
     @staticmethod
     def from_float(other: float, curr: Currency):
         units = floor(other)
-        nano = round((other - floor(other)) ** (10 ** 9))
+        nano = round((other - floor(other)) * (10 ** 9))
         return MoneyValue(units, nano, curr)
 
     @staticmethod
@@ -125,6 +139,17 @@ class MoneyValue:
         nano = int(d["nano"])
         curr = Currency[d["curr"]]
         return MoneyValue(units, nano, curr)
+
+    @staticmethod
+    def from_dict(d: dict):
+        units = int(d["units"])
+        nano = int(d["nano"])
+        curr = Currency[d["curr"]]
+        return MoneyValue(units, nano, curr)
+
+
+    def to_float(self) -> float:
+        return self.units + self.nano / (10 ** 9)
 
 
     def __add__(self, other: Self | int | float):
@@ -145,7 +170,7 @@ class MoneyValue:
             val = (self.units * other.units * (10**18) +
                    (self.units * other.nano + self.nano * other.units) * (10**9) +
                    self.nano * other.nano)
-            return MoneyValue(val / 10 ** 9, val % 10 ** 9, self.curr)
+            return MoneyValue(val // (10 ** 18), (val // (10 ** 9)) % (10 ** 9), self.curr)
         elif isinstance(other, int):
             return self * MoneyValue.from_int(other, self.curr)
         elif isinstance(other, float):
@@ -188,6 +213,7 @@ class ConnectorRequest:
 class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
     begin_date: datetime.datetime | None
     end_date: datetime.datetime | None
+    token_cypher: str
     #account_ind: int - если реализовывать переключение между разными портфелями одного пользователя
 
 
@@ -196,7 +222,8 @@ class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
 
 @dataclasses.dataclass
 class AnalyzerRequest:
-    pass
+    operations: tuple[InstrumentOperation]
+
 
 @dataclasses.dataclass
 class AnalyzerResponse:
@@ -204,15 +231,14 @@ class AnalyzerResponse:
 
 @dataclasses.dataclass
 class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
-    revenue_all_fifo: MoneyValue
-    revenue_all_lifo: MoneyValue
+    revenue_all: MoneyValue
     revenue_dividends: MoneyValue
     revenue_without_dividends: MoneyValue
-    profit_all_xirr: MoneyValue
-    profit_without_dividends_xirr: MoneyValue
-    profit_dividends_xirr: MoneyValue
-    shares_grew: tuple[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
-    shares_fell: tuple[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+    profit_all_xirr: float
+    shares_grew: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+    shares_fell: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
+
+
 
 
 
@@ -224,8 +250,9 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     end_date: datetime.datetime
     operations: tuple[InstrumentOperation]
     # котировки акций - только для начального и конечного момента
-    shares_quotations_begin: dict[str, MoneyValue]
-    shares_quotations_end: dict[str, MoneyValue]
+    quotations_begin: dict[str, MoneyValue]
+    quotations_end: dict[str, MoneyValue]
+
     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
     # currency_quotations: dict[str, list[MoneyValue]]
 
