@@ -233,8 +233,8 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     end_date: datetime.datetime
     operations: tuple[InstrumentOperation]
     # котировки акций - только для начального и конечного момента
-    shares_quotations_begin: dict[str, MoneyValue]
-    shares_quotations_end: dict[str, MoneyValue]
+    quotations_begin: dict[str, MoneyValue]
+    quotations_end: dict[str, MoneyValue]
     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
     # currency_quotations: dict[str, list[MoneyValue]]
 
