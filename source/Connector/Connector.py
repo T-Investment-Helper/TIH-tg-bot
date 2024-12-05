@@ -1,22 +1,25 @@
+import dataclasses
 import datetime
 import orjson
 
 from tinkoff.invest import services, schemas, Client, GetOperationsByCursorRequest, OperationState, CandleInterval
+
+import AnalyzerDataTypes
 from AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
-                               AnalyzerRequest, ConnectorRequest)
+                               AnalyzerRequest, ConnectorRequest, from_dict)
 
 def mv_from_t_api_mv(mv: schemas.MoneyValue):
     return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency])
 def mv_from_t_api_quotation(q: schemas.Quotation):
-    return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.NONE)
+    return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
 
 class Connector:
     def __init__(self, TOKEN: str, request: ConnectorRequest):
         self.TOKEN: str = TOKEN
         self.figi_to_info: dict[str, tuple[str, str, str, str]] = dict()
         self.conn_request: ConnectorRequest = request
-        self.analyzer_request: AnalyzerRequest
+        self.analyzer_request: AnalyzerRequest = None
         self.data: dict = dict()
 
     def get_data_for_analyzer_request(self):
@@ -31,14 +34,24 @@ class Connector:
             self.data["begin_date"] = self.conn_request.begin_date
             self.data["end_date"] = self.conn_request.end_date
             self.data["operations"] = operations
-            self.data["quotations"] = quotations
+            self.data["quotations_begin"] = quotations[0]
+            self.data["quotations_end"] = quotations[1]
+            SharesPortfolioIntervalAnalyzerRequest(**self.data)
 
-
+    def make_analyzer_request(self, request_type: dataclasses.dataclass):
+        self.analyzer_request = request_type(**self.data)
         #else: TODO
 
     def send_data_to_analyzer(self):
         # serialize
-        orjson.dumps(self.data)
+        with open("analyzer_request_test_2", 'wb') as file:
+            file.write(orjson.dumps(self.analyzer_request))
+        return None
+        a = orjson.dumps(self.analyzer_request)
+
+        print(orjson.loads(a))
+        b = from_dict(self.analyzer_request.__class__, orjson.loads(a))
+
         # send json TODO
 
     def get_instrument_info(self, operation: schemas.Operation) -> tuple[str, str, str, str]:
@@ -46,7 +59,14 @@ class Connector:
             return self.figi_to_info[operation.figi]
         else:
             with Client(self.TOKEN) as client:
-                inst = client.instruments.find_instrument(query=operation.figi).instruments[0]
+                if operation.figi == "":
+                    operation.figi = "NOT FOUND"
+                query_resp = client.instruments.find_instrument(query=operation.figi).instruments
+                if not query_resp:
+                    self.figi_to_info[operation.figi] = ("NOT FOUND", "NOT FOUND", "NOT FOUND", "NOT FOUND")
+                    return self.figi_to_info[operation.figi]
+
+                inst = query_resp[0]
                 self.figi_to_info[operation.figi] = (inst.ticker, inst.class_code, inst.name, inst.uid)
                 return self.figi_to_info[operation.figi]
 
@@ -72,16 +92,36 @@ class Connector:
         #!!!Сейчас работает в режиме "операции в валюте currency", а не перевод операций к конкретной валюте
         with Client(self.TOKEN) as client:
             account_id = client.users.get_accounts().accounts[account_index].id
-
             operations = [self.convert_t_api_operation(op) for op in
                           client.operations.get_operations(account_id=account_id,
-                                                           from_=begin_date,
+                                                           from_=client.users.get_accounts().accounts[account_index].opened_date,
                                                            to=end_date,
                                                            state=OperationState.OPERATION_STATE_EXECUTED).operations
                           if (op.instrument_type == "share" and
                               op.currency == currency.value.lower() and
                               op.state == schemas.OperationState.OPERATION_STATE_EXECUTED)
                           ]
+
+            # def get_request(cursor=""):
+            #     return GetOperationsByCursorRequest(
+            #         from_=client.users.get_accounts().accounts[account_index].opened_date,
+            #         to=end_date,
+            #         account_id=account_id,
+            #         cursor=cursor,
+            #         state=OperationState.OPERATION_STATE_EXECUTED
+            #     )
+            # operations = []
+            # new_operations = client.operations.get_operations_by_cursor(get_request())
+            # operations.extend(new_operations.items)
+            # while new_operations.has_next:
+            #     request = get_request(cursor=new_operations.next_cursor)
+            #     new_operations = client.operations.get_operations_by_cursor(request)
+            #     operations.extend(new_operations.items)
+
+
+        # for o in operations:
+            # a = orjson.dumps(o)
+            # assert o == from_dict(InstrumentOperation, orjson.loads(a))
 
         return operations
 
@@ -94,8 +134,10 @@ class Connector:
         end_quotations: dict = {}
         with Client(self.TOKEN) as client:
             for figi in shares_figi:
-                begin_quotations[figi] = MoneyValue(0, 0, Currency.NONE)
-                end_quotations[figi] = MoneyValue(0, 0, Currency.NONE)
+                if figi == "NOT FOUND":
+                    continue
+                begin_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
+                end_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
                 b_quots = [q for q in client.market_data.get_candles(from_=begin_date, to=begin_date + datetime.timedelta(10),
                                                              interval=CandleInterval.CANDLE_INTERVAL_DAY,
                                                                      instrument_id=self.figi_to_info[figi][3]).candles]
@@ -113,5 +155,6 @@ class Connector:
                         end_quotations[figi] = end_quotations[figi] + (mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
                     end_quotations[figi] /= len(b_quots)
         return (begin_quotations, end_quotations)
+
 
 
