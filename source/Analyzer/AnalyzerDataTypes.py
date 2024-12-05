@@ -16,6 +16,8 @@ def from_dict(cls: dataclasses.dataclass, d: dict) -> dataclasses.dataclass:
     for f in dataclasses.fields(cls):
         if isinstance(d[f.name], int):
             val = d[f.name]
+        elif isinstance(d[f.name], float):
+            val = d[f.name]
         elif isinstance(d[f.name], str):
             str_val = d[f.name]
             if f.type == int:
@@ -82,6 +84,7 @@ class OperationType(enum.Enum):
     OUTPUT = "OUTPUT"
     DIVIDENDS = "DIVIDENDS"
     COMMISSION = "COMMISSION"
+    NOTFOUND = "NOTFOUND"
 
     '''стоит вынести перевод типов анализатора и апи в код коннектора'''
     @classmethod
@@ -98,6 +101,7 @@ class OperationType(enum.Enum):
             return cls.COMMISSION
         if op == schemas.OperationType.OPERATION_TYPE_DIVIDEND:
             return cls.DIVIDENDS
+        return cls.NOTFOUND
 
 
 @dataclasses.dataclass
@@ -196,6 +200,7 @@ class ConnectorRequest:
 class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
     begin_date: datetime.datetime | None
     end_date: datetime.datetime | None
+    token_cypher: str
     #account_ind: int - если реализовывать переключение между разными портфелями одного пользователя
 
 
@@ -213,13 +218,10 @@ class AnalyzerResponse:
 
 @dataclasses.dataclass
 class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
-    revenue_all_fifo: MoneyValue
-    revenue_all_lifo: MoneyValue
+    revenue_all: MoneyValue
     revenue_dividends: MoneyValue
     revenue_without_dividends: MoneyValue
-    profit_all_xirr: MoneyValue
-    profit_without_dividends_xirr: MoneyValue
-    profit_dividends_xirr: MoneyValue
+    profit_all_xirr: float
     shares_grew: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
     shares_fell: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
 
