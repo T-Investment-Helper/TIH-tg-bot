@@ -1,12 +1,16 @@
 import psycopg2
+import logging
+from source.config_getter import config
+
+logging.basicConfig(level=logging.INFO)
 
 DB_SETTINGS = {
-    "dbname": "railway",
-    "user": "postgres",
-    "password": "TxnpiXcklKwpRzFKakAVWlpODywHZoDB",
-    "host": "junction.proxy.rlwy.net",
-    "port": "44633",
-    "sslmode": "require"
+    "dbname": config.db_name.get_secret_value(),
+    "user": config.db_username.get_secret_value(),
+    "password": config.db_password.get_secret_value(),
+    "host": config.db_host.get_secret_value(),
+    "port": config.db_port.get_secret_value(),
+    "sslmode": config.db_sslmode.get_secret_value()
 }
 
 def add_new_user(user_id, token):
@@ -19,11 +23,11 @@ def add_new_user(user_id, token):
         """
         cur.execute(insert_query, (user_id, token))
         conn.commit()
-        print(f"Пользователь с ID '{user_id}' добавлен.")
+        logging.info(f"Пользователь с ID '{user_id}' добавлен.")
         cur.close()
         conn.close()
     except Exception as e:
-        print("Ошибка при добавлении пользователя:", str(e))
+        logging.error(f"Ошибка при добавлении пользователя: {e}")
 
 def get_token_by_user_id(user_id):
     try:
@@ -38,13 +42,13 @@ def get_token_by_user_id(user_id):
         result = cur.fetchone()
         if result:
             token = result[0]
-            print(f"Токен для пользователя '{user_id}': {token}")
+            logging.info(f"Получен токен для пользователя '{user_id}'")
             return token
         else:
-            print(f"Пользователь с ID '{user_id}' не найден.")
+            logging.warning(f"Пользователь с ID '{user_id}' не найден.")
             return None
     except Exception as e:
-        print("Ошибка при получении токена:", str(e))
+        logging.error(f"Ошибка при получении токена: {e}")
         return None
     finally:
         if 'cur' in locals():

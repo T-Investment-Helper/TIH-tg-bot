@@ -12,6 +12,12 @@ def get_env_path():
 class Settings(BaseSettings):
     bot_token: SecretStr
     fernet_key: SecretStr
+    db_name: SecretStr
+    db_username: SecretStr
+    db_password: SecretStr
+    db_host: SecretStr
+    db_port: SecretStr
+    db_sslmode: SecretStr
     model_config = SettingsConfigDict(env_file=get_env_path(), env_file_encoding='utf-8')
 
 config = Settings()
