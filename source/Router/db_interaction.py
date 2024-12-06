@@ -1,4 +1,7 @@
 import psycopg2
+import logging
+
+logging.basicConfig(level=logging.Info)
 
 DB_SETTINGS = {
     "dbname": "railway",
@@ -19,11 +22,11 @@ def add_new_user(user_id, token):
         """
         cur.execute(insert_query, (user_id, token))
         conn.commit()
-        print(f"Пользователь с ID '{user_id}' добавлен.")
+        logging.info(f"Пользователь с ID '{user_id}' добавлен.")
         cur.close()
         conn.close()
     except Exception as e:
-        print("Ошибка при добавлении пользователя:", str(e))
+        logging.error(f"Ошибка при добавлении пользователя: {e}")
 
 def get_token_by_user_id(user_id):
     try:
@@ -38,13 +41,13 @@ def get_token_by_user_id(user_id):
         result = cur.fetchone()
         if result:
             token = result[0]
-            print(f"Токен для пользователя '{user_id}': {token}")
+            logging.info(f"Токен для пользователя '{user_id}': {token}")
             return token
         else:
-            print(f"Пользователь с ID '{user_id}' не найден.")
+            logging.warning(f"Пользователь с ID '{user_id}' не найден.")
             return None
     except Exception as e:
-        print("Ошибка при получении токена:", str(e))
+        logging.error(f"Ошибка при получении токена: {e}")
         return None
     finally:
         if 'cur' in locals():
