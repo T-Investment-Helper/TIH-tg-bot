@@ -42,7 +42,7 @@ async def get_confirmation(message: types.Message, state: FSMContext):
         data = await state.get_data()
 
         encoded_token = token_encoder.encode_token(data["token"])
-        add_new_user(data["id"], encoded_token)
+        add_new_user(str(data["id"]), encoded_token)
 
         builder = ReplyKeyboardBuilder()
         builder.add(types.KeyboardButton(text="Помощь"))

@@ -1,15 +1,24 @@
 import datetime
+import orjson
+import time
+import hashlib
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.filters.command import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiofile import async_open
 from source.Bot.messages import stats_msg, get_rqst_msg
 from source.Bot.dates import months, months_id, months_len
+from source.Analyzer.AnalyzerDataTypes import from_dict
+from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerResponse
+from source.Bot.request_former import form_request
+from source.Router.db_interaction import get_token_by_user_id
 
 router = Router()
 
 class Request(StatesGroup):
+    encoded_token = State()
     security_type = State()
     request_type = State()
     start_year = State()
@@ -22,7 +31,16 @@ class Request(StatesGroup):
 @router.message(F.text, Command("stats"))
 @router.message(F.text.lower() == "статистика")
 async def cmd_stats(message: types.Message, state: FSMContext):
-    # TODO check if user id is registered
+    encoded_token = get_token_by_user_id(str(message.from_user.id))
+    if encoded_token is None:
+        builder = ReplyKeyboardBuilder()
+        builder.add(types.KeyboardButton(text="Помощь"))
+        builder.add(types.KeyboardButton(text="Войти"))
+        builder.adjust(2)
+        await message.reply("Пожалуйста, войдите перед тем, как запрашивать статистику",
+                            reply_markup=builder.as_markup(resize_keyboard=True))
+        return
+    await state.update_data(encoded_token=encoded_token)
     await state.set_state(Request.security_type)
     builder = ReplyKeyboardBuilder()
     builder.add(types.KeyboardButton(text="Акции"))
@@ -35,7 +53,7 @@ async def cmd_stats(message: types.Message, state: FSMContext):
 
 @router.message(F.text, Request.security_type, lambda message: message.text.lower() in ["акции"])
 async def get_request(message: types.Message, state: FSMContext):
-    await state.update_data(security_type=message.text)
+    await state.update_data(security_type=message.text.lower())
     await state.set_state(Request.request_type)
     builder = ReplyKeyboardBuilder()
     builder.add(types.KeyboardButton(text="С открытия счёта до текущей даты"))
@@ -52,7 +70,6 @@ async def get_request(message: types.Message, state: FSMContext):
 @router.message(Request.request_type, F.text.lower() == "с открытия счёта до текущей даты")
 async def get_total_stats(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    # request = await form_request(data["security_type"])
     #TODO: process request
 
 
@@ -67,6 +84,7 @@ async def get_up_to_date_stats(message: types.Message, state: FSMContext):
                          reply_markup=builder.as_markup(resize_keyboard=True,
                                                         input_field_placeholder="Год окончания",
                                                         one_time_keyboard=True))
+
 
 @router.message(Request.request_type, F.text.lower() == "за определённый период")
 async def get_period_stats(message: types.Message, state: FSMContext):
@@ -161,11 +179,33 @@ async def get_end_date(message: types.Message, state: FSMContext):
     if 1 <= int(message.text) <= months_len[months[date["end_month"]]]:
         await state.update_data(end_date=int(message.text))
         data = await state.get_data()
-        # if data["start_year"] is not None:
-            # request = await form_request(data["security_type"],
-            #                             datetime.date(data["start_year"], data["start_month"], data["start_day"]),
-            #                             datetime.date(data["end_year"], data["end_month"], data["end_day"]))
-        # else:
+        if data["start_year"] is not None:
+            request = await form_request(data["security_type"],
+                                         datetime.date(data["start_year"], data["start_month"], data["start_date"]),
+                                         datetime.date(data["end_year"], data["end_month"], data["end_date"]))
+            request.token_cypher = data["encoded_token"]
+            request_time_str = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            request_file_name = f"request_shares_{hashlib.sha256((request.token_cypher+request_time_str).encode('utf-8')).hexdigest()}.json"
+            request_path = "../../connector_requests/" + request_file_name
+            async with async_open(request_path, 'wb') as f:
+                await f.write(orjson.dumps(request))
+            response_file_name = f"response_shares_{hashlib.sha256((request.token_cypher + request_time_str).encode('utf-8')).hexdigest()}.json"
+            response_path = "../../analyzer_responses/" + response_file_name
+            results = None
+            total_sleep_time = 0
+            while not results and total_sleep_time < 10:
+                time.sleep(0.5)
+                total_sleep_time += 0.5
+                async with async_open(response_path, 'rb') as f:
+                    contents = await f.read()
+                    results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
+            if not results:
+                message.answer("К сожалению, Ваш запрос не удалось обработать. Попробуйте позже или скорректируйте запрос")
+            else:
+                message.answer("Ваша статистика")
+
+        else:
+            pass
             # request = await form_request(data["security_type"],
             #                             None,
             #                             datetime.date(data["end_year"], data["end_month"], data["end_day"]))
