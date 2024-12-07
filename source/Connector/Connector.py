@@ -1,5 +1,7 @@
 import dataclasses
 import datetime
+import time
+
 import orjson
 import os
 import pathlib
@@ -7,7 +9,7 @@ import pathlib
 
 
 from tinkoff.invest import schemas, Client, OperationState, CandleInterval
-from ..Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
+from Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                          InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
                                          AnalyzerRequest, ConnectorRequest, from_dict)
 
@@ -17,12 +19,14 @@ def mv_from_t_api_quotation(q: schemas.Quotation):
     return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
 
 def look_for_request():
+    time.sleep(0.5)
     while(True):
-        if len(os.listdir('.../connector_requests/connector_request')) != 0:
-            for p in pathlib.Path('.../connector_requests').iterdir():
+        if len(os.listdir('../connector_requests')) != 0:
+            for p in pathlib.Path('../connector_requests').iterdir():
                 with p.open() as f:
                     req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(f.read()))
                     Connector(SharesPortfolioIntervalConnectorRequest.token_cypher, req)
+                    p.unlink()
 
 
 
@@ -35,6 +39,13 @@ class Connector:
         self.conn_request: ConnectorRequest = request
         self.analyzer_request: AnalyzerRequest = None
         self.data: dict = dict()
+
+        try:
+            self.get_data_for_analyzer_request()
+            self.make_analyzer_request()
+            self.send_data_to_analyzer()
+        except:
+            self.make_error_response()
 
     def get_data_for_analyzer_request(self):
         if isinstance(self.conn_request, SharesPortfolioIntervalConnectorRequest):
@@ -55,12 +66,15 @@ class Connector:
     def make_analyzer_request(self, request_type: dataclasses.dataclass):
         self.analyzer_request = request_type(**self.data)
         #else: TODO
+    def make_error_response(self):
+        with open("../analyzer_response", "wb") as file:
+            file.write(b"")
 
     def send_data_to_analyzer(self):
         # serialize
-        with open(".../analyzer_request", 'wb') as file:
+        with open("../", "wb") as file:
             file.write(orjson.dumps(self.analyzer_request))
-        return None
+        # return None
         # a = orjson.dumps(self.analyzer_request)
         #
         # print(orjson.loads(a))
@@ -105,6 +119,8 @@ class Connector:
                                   account_index: int = 0) -> list[InstrumentOperation]:
         #!!!Сейчас работает в режиме "операции в валюте currency", а не перевод операций к конкретной валюте
         with Client(self.TOKEN) as client:
+            print(client.users.get_accounts())
+            # print(client.operations.get_portfolio(account_id=client.users.get_accounts().accounts[0].id))
             account_id = client.users.get_accounts().accounts[account_index].id
             operations = [self.convert_t_api_operation(op) for op in
                           client.operations.get_operations(account_id=account_id,
@@ -169,8 +185,6 @@ class Connector:
                         end_quotations[figi] = end_quotations[figi] + (mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
                     end_quotations[figi] /= len(b_quots)
         return (begin_quotations, end_quotations)
-
-
 
 
 
