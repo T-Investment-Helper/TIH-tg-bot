@@ -6,10 +6,10 @@ import orjson
 import os
 import pathlib
 
-
+from source.Bot.encoder import token_encoder
 
 from tinkoff.invest import schemas, Client, OperationState, CandleInterval
-from Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
+from source.Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                          InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
                                          AnalyzerRequest, ConnectorRequest, from_dict)
 
@@ -19,14 +19,14 @@ def mv_from_t_api_quotation(q: schemas.Quotation):
     return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
 
 def look_for_request():
-    time.sleep(0.5)
     while(True):
+        time.sleep(0.5)
         if len(os.listdir('../../connector_requests')) != 0:
             for p in pathlib.Path('../../connector_requests').iterdir():
                 with p.open() as f:
                     req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(f.read()))
-                    Connector(SharesPortfolioIntervalConnectorRequest.token_cypher, req, f.name.split("_")[2])
-                    p.unlink()
+                    Connector(req.token_cypher, req, f.name.split("_")[3])
+                p.unlink()
 
 
 
@@ -43,7 +43,7 @@ class Connector:
 
         try:
             self.get_data_for_analyzer_request()
-            self.make_analyzer_request()
+            self.make_analyzer_request(SharesPortfolioIntervalAnalyzerRequest)
             self.send_data_to_analyzer()
         except:
             self.make_error_response()
@@ -121,7 +121,7 @@ class Connector:
                                   account_index: int = 0) -> list[InstrumentOperation]:
         #!!!Сейчас работает в режиме "операции в валюте currency", а не перевод операций к конкретной валюте
         with Client(self.TOKEN) as client:
-            print(client.users.get_accounts())
+            # print(client.users.get_accounts())
             # print(client.operations.get_portfolio(account_id=client.users.get_accounts().accounts[0].id))
             account_id = client.users.get_accounts().accounts[account_index].id
             operations = [self.convert_t_api_operation(op) for op in

@@ -15,7 +15,9 @@ from source.Bot.dates import months, months_id
 from source.Analyzer.AnalyzerDataTypes import from_dict
 from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerResponse
 from source.Bot.request_former import form_request
+from source.Bot.result_former import form_result
 from source.Router.db_interaction import get_token_by_user_id
+from source.Bot.encoder import token_encoder
 
 router = Router()
 
@@ -203,15 +205,16 @@ async def get_end_date(message: types.Message, state: FSMContext):
             while not results and total_sleep_time < 10:
                 time.sleep(0.5)
                 total_sleep_time += 0.5
-                async with async_open(response_path, 'rb') as f:
-                    contents = await f.read()
-                    results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
-            Path(request_path).unlink()
+                if Path(response_path).exists():
+                    async with async_open(response_path, 'rb') as f:
+                        contents = await f.read()
+                        results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
             Path(response_path).unlink()
             if not results:
                 await message.answer("К сожалению, Ваш запрос не удалось обработать\. Попробуйте позже или скорректируйте запрос")
             else:
-                await message.answer("Ваша статистика")
+                result_msg = await form_result(results)
+                await message.answer(result_msg)
         else:
             await message.answer("К сожалению, Ваш запрос пока не поддерживается")
             # TODO: add request processing

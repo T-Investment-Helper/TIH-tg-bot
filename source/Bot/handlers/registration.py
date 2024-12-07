@@ -28,7 +28,7 @@ async def get_token(message: types.Message, state: FSMContext):
     builder.add(types.KeyboardButton(text="Подтвердить"))
     builder.add(types.KeyboardButton(text="Не подтверждать"))
     builder.adjust(2)
-    await message.reply(f'''Подтвердите, пожалуйста, отправку токена {token}, нажав кнопку "Подтвердить" \
+    await message.reply(f'''Подтвердите, пожалуйста, отправку токена, нажав кнопку "Подтвердить" \
 или написав "Подтвердить" \(в любом регистре\)\.
 
 Обратите внимание, что это последний шанс стереть введённый токен, написав /cancel\! После \

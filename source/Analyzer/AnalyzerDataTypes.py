@@ -208,8 +208,8 @@ class ConnectorRequest:
 
 @dataclasses.dataclass
 class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
-    begin_date: datetime.datetime | None
-    end_date: datetime.datetime | None
+    begin_date: datetime.datetime
+    end_date: datetime.datetime
     token_cypher: str
     #account_ind: int - если реализовывать переключение между разными портфелями одного пользователя
 

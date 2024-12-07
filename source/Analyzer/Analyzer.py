@@ -16,8 +16,8 @@ def look_for_request():
             for p in pathlib.Path('../../analyzer_requests').iterdir():
                 with p.open() as f:
                     req = from_dict(SharesPortfolioIntervalAnalyzerRequest, orjson.loads(f.read()))
-                    Analyzer(req, f.name.split("_")[2])
-                    p.unlink()
+                    Analyzer(req, f.name.split("_")[3])
+                p.unlink()
 
 class Analyzer:
     def __init__(self, request: AnalyzerRequest, req_name):

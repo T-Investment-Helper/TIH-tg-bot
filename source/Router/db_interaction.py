@@ -31,6 +31,7 @@ def add_new_user(user_id, token):
         conn.close()
     except Exception as e:
         logging.error(f"Ошибка при добавлении пользователя: {e}")
+        raise e
 
 
 def get_token_by_user_id(user_id):

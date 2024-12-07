@@ -18,9 +18,9 @@ async def form_result(response: SharesPortfolioIntervalAnalyzerResponse):
     s_f = response.shares_fell
     result = f'''*Статистика по Вашим акциям за выбранный период*
 
-*Полный доход:* {r_a}
-*Дивидендный доход:* {r_d}
-*Доход без учёта дивидендов:* {r_wd}
+*Полная прибыль:* {r_a}
+*Дивидендная прибыль:* {r_d}
+*Прибыль без учёта дивидендов:* {r_wd}
 *Доходность:* {p}
 '''
     result += "*Выросли:* "
@@ -28,8 +28,7 @@ async def form_result(response: SharesPortfolioIntervalAnalyzerResponse):
         result += s_g[i]
         if i != len(s_g) - 1:
             result += ", "
-        else:
-            result += "\n"
+    result += "\n"
     result += "*Упали:* "
     for i in range(len(s_f)):
         result += s_f[i]
