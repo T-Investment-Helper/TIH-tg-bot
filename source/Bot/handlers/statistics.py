@@ -8,8 +8,10 @@ from aiogram.filters.command import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from aiofile import async_open
+from calendar import monthrange
+from pathlib import Path
 from source.Bot.messages import stats_msg, get_rqst_msg
-from source.Bot.dates import months, months_id, months_len
+from source.Bot.dates import months, months_id
 from source.Analyzer.AnalyzerDataTypes import from_dict
 from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerResponse
 from source.Bot.request_former import form_request
@@ -37,7 +39,7 @@ async def cmd_stats(message: types.Message, state: FSMContext):
         builder.add(types.KeyboardButton(text="Помощь"))
         builder.add(types.KeyboardButton(text="Войти"))
         builder.adjust(2)
-        await message.reply("Пожалуйста, войдите перед тем, как запрашивать статистику",
+        await message.reply("Пожалуйста, войдите перед тем, как запрашивать статистику, или повторите попытку позже",
                             reply_markup=builder.as_markup(resize_keyboard=True))
         return
     await state.update_data(encoded_token=encoded_token)
@@ -69,8 +71,8 @@ async def get_request(message: types.Message, state: FSMContext):
 
 @router.message(Request.request_type, F.text.lower() == "с открытия счёта до текущей даты")
 async def get_total_stats(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    #TODO: process request
+    await message.answer("К сожалению, Ваш запрос пока не поддерживается")
+    # TODO: add request processing
 
 
 @router.message(Request.request_type, F.text.lower() == "с открытия счёта до определённой даты")
@@ -116,9 +118,11 @@ async def get_start_month(message: types.Message, state: FSMContext):
     await state.update_data(start_month=months_id[message.text.upper()])
     await state.set_state(Request.start_date)
     builder = ReplyKeyboardBuilder()
-    for i in range(1, months_len[message.text.upper()] + 1):
+    data = await state.get_data()
+    month_len = monthrange(data["start_year"], data["start_month"])[1]
+    for i in range(1, month_len + 1):
         builder.add(types.KeyboardButton(text=str(i)))
-    builder.adjust(5, 5, 5, 5, 5, months_len[message.text.upper()] - 25)
+    builder.adjust(5, 5, 5, 5, 5, month_len - 25)
     await message.reply("Отлично\! Теперь выберите число начала",
                          reply_markup=builder.as_markup(resize_keyboard=True,
                                                         input_field_placeholder="Число начала",
@@ -126,9 +130,9 @@ async def get_start_month(message: types.Message, state: FSMContext):
 
 @router.message(Request.start_date, lambda message: message.text.isdigit())
 async def get_start_date(message: types.Message, state: FSMContext):
-    # TODO improve get_state
-    date = await state.get_data()
-    if 1 <= int(message.text) <= months_len[months[date["start_month"]]]:
+    data = await state.get_data()
+    month_len = monthrange(data["start_year"], data["start_month"])[1]
+    if 1 <= int(message.text) <= month_len:
         await state.update_data(start_date=int(message.text))
         await state.set_state(Request.end_year)
         builder = ReplyKeyboardBuilder()
@@ -139,9 +143,9 @@ async def get_start_date(message: types.Message, state: FSMContext):
                                                            one_time_keyboard=True))
     else:
         builder = ReplyKeyboardBuilder()
-        for i in range(1, months_len[months[date["start_month"]]] + 1):
+        for i in range(1, month_len + 1):
             builder.add(types.KeyboardButton(text=str(i)))
-        builder.adjust(5, 5, 5, 5, 5, months_len[months[date["start_month"]]] - 25)
+        builder.adjust(5, 5, 5, 5, 5, month_len - 25)
         await message.reply("Выберите корректную дату начала",
                             reply_markup=builder.as_markup(resize_keyboard=True,
                                                            input_field_placeholder="Число начала",
@@ -165,9 +169,11 @@ async def get_end_month(message: types.Message, state: FSMContext):
     await state.update_data(end_month=months_id[message.text.upper()])
     await state.set_state(Request.end_date)
     builder = ReplyKeyboardBuilder()
-    for i in range(1, months_len[message.text.upper()] + 1):
+    data = await state.get_data()
+    month_len = monthrange(data["end_year"], data["end_month"])[1]
+    for i in range(1, month_len + 1):
         builder.add(types.KeyboardButton(text=str(i)))
-    builder.adjust(5, 5, 5, 5, 5, months_len[message.text.upper()] - 25)
+    builder.adjust(5, 5, 5, 5, 5, month_len - 25)
     await message.reply("Отлично\! Теперь выберите число окончания",
                          reply_markup=builder.as_markup(resize_keyboard=True,
                                                         input_field_placeholder="Число окончания",
@@ -175,8 +181,9 @@ async def get_end_month(message: types.Message, state: FSMContext):
 
 @router.message(Request.end_date, lambda message: message.text.isdigit())
 async def get_end_date(message: types.Message, state: FSMContext):
-    date = await state.get_data()
-    if 1 <= int(message.text) <= months_len[months[date["end_month"]]]:
+    data = await state.get_data()
+    month_len = monthrange(data["end_year"], data["end_month"])[1]
+    if 1 <= int(message.text) <= month_len:
         await state.update_data(end_date=int(message.text))
         data = await state.get_data()
         if data["start_year"] is not None:
@@ -199,23 +206,21 @@ async def get_end_date(message: types.Message, state: FSMContext):
                 async with async_open(response_path, 'rb') as f:
                     contents = await f.read()
                     results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
+            Path(request_path).unlink()
+            Path(response_path).unlink()
             if not results:
-                message.answer("К сожалению, Ваш запрос не удалось обработать. Попробуйте позже или скорректируйте запрос")
+                await message.answer("К сожалению, Ваш запрос не удалось обработать\. Попробуйте позже или скорректируйте запрос")
             else:
-                message.answer("Ваша статистика")
-
+                await message.answer("Ваша статистика")
         else:
-            pass
-            # request = await form_request(data["security_type"],
-            #                             None,
-            #                             datetime.date(data["end_year"], data["end_month"], data["end_day"]))
-        # TODO: process request
+            await message.answer("К сожалению, Ваш запрос пока не поддерживается")
+            # TODO: add request processing
         await state.clear()
     else:
         builder = ReplyKeyboardBuilder()
-        for i in range(1, months_len[months[date["end_month"]]] + 1):
+        for i in range(1, month_len + 1):
             builder.add(types.KeyboardButton(text=str(i)))
-        builder.adjust(5, 5, 5, 5, 5, months_len[months[date["end_month"]]] - 25)
+        builder.adjust(5, 5, 5, 5, 5, month_len - 25)
         await message.reply("Выберите корректную дату окончания",
                             reply_markup=builder.as_markup(resize_keyboard=True,
                                                            input_field_placeholder="Число окончания",
