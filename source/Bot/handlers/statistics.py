@@ -209,7 +209,8 @@ async def get_end_date(message: types.Message, state: FSMContext):
                     async with async_open(response_path, 'rb') as f:
                         contents = await f.read()
                         results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
-            Path(response_path).unlink()
+            if Path(response_path).exists():
+                Path(response_path).unlink()
             if not results:
                 await message.answer("К сожалению, Ваш запрос не удалось обработать\. Попробуйте позже или скорректируйте запрос")
             else:
