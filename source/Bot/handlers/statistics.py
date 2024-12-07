@@ -38,7 +38,7 @@ async def cmd_stats(message: types.Message, state: FSMContext):
         builder.add(types.KeyboardButton(text="Помощь"))
         builder.add(types.KeyboardButton(text="Войти"))
         builder.adjust(2)
-        await message.reply("Пожалуйста, войдите перед тем, как запрашивать статистику",
+        await message.reply("Пожалуйста, войдите перед тем, как запрашивать статистику, или повторите попытку позже",
                             reply_markup=builder.as_markup(resize_keyboard=True))
         return
     await state.update_data(encoded_token=encoded_token)
@@ -70,8 +70,8 @@ async def get_request(message: types.Message, state: FSMContext):
 
 @router.message(Request.request_type, F.text.lower() == "с открытия счёта до текущей даты")
 async def get_total_stats(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    #TODO: process request
+    await message.answer("К сожалению, Ваш запрос пока не поддерживается")
+    # TODO: add request processing
 
 
 @router.message(Request.request_type, F.text.lower() == "с открытия счёта до определённой даты")
@@ -203,14 +203,12 @@ async def get_end_date(message: types.Message, state: FSMContext):
             Path(request_path).unlink()
             Path(response_path).unlink()
             if not results:
-                message.answer("К сожалению, Ваш запрос не удалось обработать. Попробуйте позже или скорректируйте запрос")
+                await message.answer("К сожалению, Ваш запрос не удалось обработать\. Попробуйте позже или скорректируйте запрос")
             else:
-                message.answer("Ваша статистика")
+                await message.answer("Ваша статистика")
         else:
-            pass
-            # request = await form_request(data["security_type"],
-            #                             None,
-            #                             datetime.date(data["end_year"], data["end_month"], data["end_day"]))
+            await message.answer("К сожалению, Ваш запрос пока не поддерживается")
+            # TODO: add request processing
         await state.clear()
     else:
         builder = ReplyKeyboardBuilder()

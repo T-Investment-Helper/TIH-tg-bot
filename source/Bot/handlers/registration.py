@@ -40,16 +40,18 @@ async def get_token(message: types.Message, state: FSMContext):
 async def get_confirmation(message: types.Message, state: FSMContext):
     if message.text.lower() == "подтвердить":
         data = await state.get_data()
-
         encoded_token = token_encoder.encode_token(data["token"])
-        add_new_user(str(data["id"]), encoded_token)
+        try:
+            add_new_user(str(data["id"]), encoded_token)
 
-        builder = ReplyKeyboardBuilder()
-        builder.add(types.KeyboardButton(text="Помощь"))
-        builder.add(types.KeyboardButton(text="Статистика"))
-        await message.reply(get_confirm_msg,
-                            reply_markup=builder.as_markup(resize_keyboard=True))
-        await state.clear()
+            builder = ReplyKeyboardBuilder()
+            builder.add(types.KeyboardButton(text="Помощь"))
+            builder.add(types.KeyboardButton(text="Статистика"))
+            await message.reply(get_confirm_msg,
+                                reply_markup=builder.as_markup(resize_keyboard=True))
+            await state.clear()
+        except Exception:
+            await message.reply("К сожалению, войти не удалось\. Попробуйте, пожалуйста, позже")
     else:
         builder = ReplyKeyboardBuilder()
         builder.add(types.KeyboardButton(text="Подтвердить"))
