@@ -40,7 +40,8 @@ async def get_token(message: types.Message, state: FSMContext):
 async def get_confirmation(message: types.Message, state: FSMContext):
     if message.text.lower() == "подтвердить":
         data = await state.get_data()
-        encoded_token = token_encoder.encode_token(data["token"])
+        # encoded_token = token_encoder.encode_token(data["token"])
+        encoded_token = data["token"]
         try:
             add_new_user(str(data["id"]), encoded_token)
 
