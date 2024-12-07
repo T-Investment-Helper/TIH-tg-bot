@@ -12,15 +12,16 @@ import os
 def look_for_request():
     while(True):
         time.sleep(0.5)
-        if len(os.listdir('../analyzer_requests')) != 0:
-            for p in pathlib.Path('.../analyzer_requests').iterdir():
+        if len(os.listdir('../../analyzer_requests')) != 0:
+            for p in pathlib.Path('../../analyzer_requests').iterdir():
                 with p.open() as f:
                     req = from_dict(SharesPortfolioIntervalAnalyzerRequest, orjson.loads(f.read()))
-                    Analyzer(req)
+                    Analyzer(req, f.name.split("_")[2])
                     p.unlink()
 
 class Analyzer:
-    def __init__(self, request: AnalyzerRequest):
+    def __init__(self, request: AnalyzerRequest, req_name):
+        self.req_name = req_name
         self.request: AnalyzerRequest = request
         self.response_data: dict = dict()
         self.response: AnalyzerResponse
@@ -106,7 +107,7 @@ class Analyzer:
 
 
     def send_response(self):
-        with open("../analyzer_response", "wb") as file:
+        with open("../../analyzer_responses/response_shares_" + self.req_name, "wb") as file:
             file.write(orjson.dumps(SharesPortfolioIntervalAnalyzerResponse(**self.response_data)))
 
 

@@ -21,11 +21,11 @@ def mv_from_t_api_quotation(q: schemas.Quotation):
 def look_for_request():
     time.sleep(0.5)
     while(True):
-        if len(os.listdir('../connector_requests')) != 0:
-            for p in pathlib.Path('../connector_requests').iterdir():
+        if len(os.listdir('../../connector_requests')) != 0:
+            for p in pathlib.Path('../../connector_requests').iterdir():
                 with p.open() as f:
                     req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(f.read()))
-                    Connector(SharesPortfolioIntervalConnectorRequest.token_cypher, req)
+                    Connector(SharesPortfolioIntervalConnectorRequest.token_cypher, req, f.name.split("_")[2])
                     p.unlink()
 
 
@@ -33,7 +33,8 @@ def look_for_request():
 
 
 class Connector:
-    def __init__(self, TOKEN: str, request: ConnectorRequest):
+    def __init__(self, TOKEN: str, request: ConnectorRequest, req_name):
+        self.req_name = req_name
         self.TOKEN: str = TOKEN
         self.figi_to_info: dict[str, tuple[str, str, str, str]] = dict()
         self.conn_request: ConnectorRequest = request
@@ -67,13 +68,14 @@ class Connector:
         self.analyzer_request = request_type(**self.data)
         #else: TODO
     def make_error_response(self):
-        with open("../analyzer_response", "wb") as file:
+        with open("../../analyzer_responses/response_shares_" + self.req_name, "wb") as file:
             file.write(b"")
 
     def send_data_to_analyzer(self):
         # serialize
-        with open("../", "wb") as file:
+        with open("../../analyzer_requests/request_shares_" + self.req_name, "wb") as file:
             file.write(orjson.dumps(self.analyzer_request))
+
         # return None
         # a = orjson.dumps(self.analyzer_request)
         #
