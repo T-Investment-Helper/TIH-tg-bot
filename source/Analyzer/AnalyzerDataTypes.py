@@ -106,6 +106,8 @@ class OperationType(enum.Enum):
             return cls.COMMISSION
         if op == schemas.OperationType.OPERATION_TYPE_DIVIDEND:
             return cls.DIVIDENDS
+        if op == schemas.OperationType.OPERATION_TYPE_BUY_CARD:
+            return cls.BUY
         return cls.NOTFOUND
 
 
@@ -140,12 +142,7 @@ class MoneyValue:
         curr = Currency[d["curr"]]
         return MoneyValue(units, nano, curr)
 
-    @staticmethod
-    def from_dict(d: dict):
-        units = int(d["units"])
-        nano = int(d["nano"])
-        curr = Currency[d["curr"]]
-        return MoneyValue(units, nano, curr)
+
 
 
     def to_float(self) -> float:
@@ -267,4 +264,3 @@ class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
 #     shares_quotations: (dict[str, MoneyValue], dict[str, MoneyValue])
 #     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
 #     currency_quotations: dict[str, list[MoneyValue]]
-
