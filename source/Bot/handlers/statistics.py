@@ -8,6 +8,7 @@ from aiogram.filters.command import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from aiofile import async_open
+from pathlib import Path
 from source.Bot.messages import stats_msg, get_rqst_msg
 from source.Bot.dates import months, months_id, months_len
 from source.Analyzer.AnalyzerDataTypes import from_dict
@@ -199,17 +200,17 @@ async def get_end_date(message: types.Message, state: FSMContext):
                 async with async_open(response_path, 'rb') as f:
                     contents = await f.read()
                     results = from_dict(SharesPortfolioIntervalAnalyzerResponse, orjson.loads(contents))
+            Path(request_path).unlink()
+            Path(response_path).unlink()
             if not results:
                 message.answer("К сожалению, Ваш запрос не удалось обработать. Попробуйте позже или скорректируйте запрос")
             else:
                 message.answer("Ваша статистика")
-
         else:
             pass
             # request = await form_request(data["security_type"],
             #                             None,
             #                             datetime.date(data["end_year"], data["end_month"], data["end_day"]))
-        # TODO: process request
         await state.clear()
     else:
         builder = ReplyKeyboardBuilder()
