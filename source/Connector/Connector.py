@@ -17,17 +17,25 @@ def mv_from_t_api_quotation(q: schemas.Quotation):
     return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
 
 def look_for_request():
+    p = pathlib.Path.cwd()
+    p = p.parent / "connector_requests"
+    p.mkdir(exist_ok=True)
     while(True):
+        requests = [req for req in p.iterdir()]
+        if len(requests) != 0:
+            for p in requests:
+                name_parts = p.name.split("_")
+                if (name_parts[1] == "shares"):
+                    req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(p.read_bytes()))
+                    Connector(req.token_cypher, req, name_parts[2])
+                    p.unlink()
+                    break
+                if (name_parts[1] == "bonds"):
+                    pass
+                    # TODO
+                else:
+                    continue
         time.sleep(0.5)
-        if len(os.listdir('../../connector_requests')) != 0:
-            for p in pathlib.Path('../../connector_requests').iterdir():
-                with p.open() as f:
-                    req = from_dict(SharesPortfolioIntervalConnectorRequest, orjson.loads(f.read()))
-                    Connector(req.token_cypher, req, f.name.split("_")[3])
-                p.unlink()
-
-
-
 
 
 class Connector:
@@ -65,22 +73,29 @@ class Connector:
 
     def make_analyzer_request(self, request_type: dataclasses.dataclass):
         self.analyzer_request = request_type(**self.data)
-        #else: TODO
     def make_error_response(self):
         p = pathlib.Path.cwd()
         p = p.parent / "analyzer_responses"
         p.mkdir(exist_ok=True)
-        p = p / ("response_shares_" + self.req_name)
-        p.touch(exist_ok=True)
-        p.write_bytes(b"")
+        if isinstance(self.analyzer_request, SharesPortfolioIntervalAnalyzerRequest):
+            p = p / ("response_shares_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(b"")
+        else:
+            #TODO
+            pass
 
     def send_data_to_analyzer(self):
         p = pathlib.Path.cwd()
         p = p.parent / "analyzer_requests"
         p.mkdir(exist_ok=True)
-        p = p / ("request_shares_" + self.req_name)
-        p.touch(exist_ok=True)
-        p.write_bytes(orjson.dumps(self.analyzer_request))
+        if isinstance(self.analyzer_request, SharesPortfolioIntervalAnalyzerRequest):
+            p = p / ("request_shares_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(orjson.dumps(self.analyzer_request))
+        else:
+            pass
+            #TODO
 
     def get_instrument_info(self, operation: schemas.Operation) -> tuple[str, str, str, str]:
         if operation.figi in self.figi_to_info:
