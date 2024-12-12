@@ -6,7 +6,7 @@ import os
 import pathlib
 
 
-from tinkoff.invest import schemas, Client, OperationState, CandleInterval
+from tinkoff.invest import schemas, Client, OperationState, CandleInterval, GetOperationsByCursorRequest
 from Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                          InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
                                          AnalyzerRequest, ConnectorRequest, from_dict)
@@ -47,6 +47,7 @@ class Connector:
         self.analyzer_request: AnalyzerRequest = None
         self.data: dict = dict()
 
+    def process_request(self):
         try:
             self.get_data_for_analyzer_request()
             self.make_analyzer_request(SharesPortfolioIntervalAnalyzerRequest)
@@ -57,9 +58,7 @@ class Connector:
 
     def get_data_for_analyzer_request(self):
         if isinstance(self.conn_request, SharesPortfolioIntervalConnectorRequest):
-            operations = self.get_shares_operations_for_period(Currency.RUB,
-                                                               self.conn_request.begin_date,
-                                                               self.conn_request.end_date)
+            operations = self.get_shares_operations_for_period(self.conn_request.end_date)
             quotations = self.get_shares_quotations_for_period(self.conn_request.begin_date,
                                                                self.conn_request.end_date,
                                                                list(self.figi_to_info.keys()),
@@ -97,7 +96,7 @@ class Connector:
             pass
             #TODO
 
-    def get_instrument_info(self, operation: schemas.Operation) -> tuple[str, str, str, str]:
+    def get_instrument_info(self, operation: schemas.OperationItem) -> tuple[str, str, str, str]:
         if operation.figi in self.figi_to_info:
             return self.figi_to_info[operation.figi]
         else:
@@ -113,22 +112,22 @@ class Connector:
                 self.figi_to_info[operation.figi] = (inst.ticker, inst.class_code, inst.name, inst.uid)
                 return self.figi_to_info[operation.figi]
 
-    def convert_t_api_operation(self, operation: schemas.Operation):
+    def convert_t_api_operation(self, operation: schemas.OperationItem):
         info = self.get_instrument_info(operation)
-        curr = Currency[operation.currency.upper()]
+        curr = Currency[operation.payment.currency.upper()]
         return InstrumentOperation(date=operation.date,
                                    figi=operation.figi,
                                    ticker=info[0],
                                    instrument_type=InstrumentType.from_t_api_instrument_type(operation.instrument_type),
                                    instrument_name=info[2],
                                    exchange_code=info[1],
-                                   operation_type=OperationType.from_t_api_operation_type(operation.operation_type),
-                                   quantity=operation.quantity, currency=curr,
+                                   operation_type=OperationType.from_t_api_operation_type(operation.type),
+                                   quantity=operation.quantity_done, currency=curr,
                                    price=MoneyValue(operation.price.units, operation.price.nano, curr),
                                    payment=MoneyValue(operation.payment.units, operation.payment.nano, curr))
 
 
-    def get_shares_operations_for_period(self, currency: Currency,
+    def get_shares_operations_for_period_without_cursor(self, currency: Currency,
                                   begin_date: datetime.datetime,
                                   end_date: datetime.datetime,
                                   account_index: int = 0) -> list[InstrumentOperation]:
@@ -136,6 +135,7 @@ class Connector:
         with Client(self.TOKEN) as client:
             # print(client.users.get_accounts())
             # print(client.operations.get_portfolio(account_id=client.users.get_accounts().accounts[0].id))
+            client.get_all_candles()
             account_id = client.users.get_accounts().accounts[account_index].id
             operations = [self.convert_t_api_operation(op) for op in
                           client.operations.get_operations(account_id=account_id,
@@ -170,6 +170,35 @@ class Connector:
 
         return operations
 
+    def get_shares_operations_for_period(self,
+                                        end_date: datetime.datetime,
+                                        account_index: int = 0):
+
+        #Работает ТОЛЬКО с рублевыми операциями (спасибо за блок в евроклире)
+
+        with Client(self.TOKEN) as client:
+            account_id = client.users.get_accounts().accounts[account_index].id
+            operations_t_api = client.operations.get_operations_by_cursor(GetOperationsByCursorRequest(
+                to=end_date,
+                account_id=account_id,
+                operation_types=[schemas.OperationType.OPERATION_TYPE_BUY_CARD, schemas.OperationType.OPERATION_TYPE_BUY, schemas.OperationType.OPERATION_TYPE_BROKER_FEE],
+                state=schemas.OperationState.OPERATION_STATE_EXECUTED
+
+            ))
+            operations = [self.convert_t_api_operation(op) for op in operations_t_api.items if op.payment.currency == 'rub' and op.instrument_type == "share"]
+            while operations_t_api.has_next:
+                operations_t_api = client.operations.get_operations_by_cursor(GetOperationsByCursorRequest(
+                    to=end_date,
+                    account_id=account_id,
+                    operation_types=[schemas.OperationType.OPERATION_TYPE_BUY_CARD, schemas.OperationType.OPERATION_TYPE_BUY, schemas.OperationType.OPERATION_TYPE_BROKER_FEE, schemas.OperationType.OPERATION_TYPE_SELL],
+                    state=schemas.OperationState.OPERATION_STATE_EXECUTED,
+                    cursor=operations_t_api.next_cursor
+                ))
+                operations.extend([self.convert_t_api_operation(op) for op in operations_t_api.items if op.payment.currency == 'rub' and op.instrument_type == "share"])
+        operations.reverse()
+        return operations
+
+
 
     def get_shares_quotations_for_period(self, begin_date: datetime.datetime,
                                          end_date: datetime.datetime,
@@ -177,47 +206,62 @@ class Connector:
                                          curr: Currency) -> tuple[dict[str, MoneyValue], dict[str, MoneyValue]]:
         begin_quotations: dict = {}
         end_quotations: dict = {}
+        count = 0
         with Client(self.TOKEN) as client:
             for figi in shares_figi:
-                if figi == "NOT FOUND":
-                    continue
-                begin_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
-                end_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
-                b_quots = [q for q in client.market_data.get_candles(
-                                                                     from_=begin_date - datetime.timedelta(1), to=begin_date,
-                                                                     interval=CandleInterval.CANDLE_INTERVAL_DAY,
-                                                                     instrument_id=self.figi_to_info[figi][3]).candles]
-                while not b_quots:
-                    begin_date -= datetime.timedelta(1)
+                try:
+                    if figi == "NOT FOUND":
+                        continue
+                    begin_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
+                    end_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
                     b_quots = [q for q in client.market_data.get_candles(
-                                                              from_=begin_date - datetime.timedelta(1), to=begin_date,
-                                                              interval=CandleInterval.CANDLE_INTERVAL_DAY,
-                                                              instrument_id=self.figi_to_info[figi][3]).candles]
+                                                                         from_=begin_date - datetime.timedelta(1), to=begin_date,
+                                                                         interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                                         instrument_id=self.figi_to_info[figi][3]).candles]
+                    count += 1
+                    shift = 1
+                    while not b_quots:
+                        shift += 1
+                        b_quots = [q for q in client.market_data.get_candles(
+                                                                  from_=begin_date - shift * datetime.timedelta(1), to=begin_date,
+                                                                  interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                                  instrument_id=self.figi_to_info[figi][3]).candles]
+                        count += 1
+                        if shift == 7:
+                            break
 
-                e_quots = [q for q in client.market_data.get_candles(
-                                                                     from_=end_date - datetime.timedelta(1), to=end_date,
-                                                                     interval=CandleInterval.CANDLE_INTERVAL_DAY,
-                                                                     instrument_id=self.figi_to_info[figi][3]).candles]
-                while not e_quots:
-                    end_date -= datetime.timedelta(1)
                     e_quots = [q for q in client.market_data.get_candles(
-                                                              from_=end_date - datetime.timedelta(1), to=end_date,
-                                                              interval=CandleInterval.CANDLE_INTERVAL_DAY,
-                                                              instrument_id=self.figi_to_info[figi][3]).candles]
-                if len(b_quots) != 0:
-                    for q in b_quots:
-                        begin_quotations[figi] = begin_quotations[figi] + (
-                                    mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
-                    begin_quotations[figi] /= len(b_quots)
-                else:
-                    raise ValueError
+                                                                         from_=end_date - datetime.timedelta(1), to=end_date,
+                                                                         interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                                         instrument_id=self.figi_to_info[figi][3]).candles]
+                    count += 1
+                    shift = 1
+                    while not e_quots:
+                        shift += 1
+                        e_quots = [q for q in client.market_data.get_candles(
+                                                                  from_=end_date - shift * datetime.timedelta(1), to=end_date,
+                                                                  interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                                  instrument_id=self.figi_to_info[figi][3]).candles]
+                        count += 1
+                        if shift == 7:
+                            break
+                    if len(b_quots) != 0:
+                        for q in b_quots:
+                            begin_quotations[figi] = begin_quotations[figi] + (
+                                        mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
+                        begin_quotations[figi] /= len(b_quots)
 
-                if len(e_quots) != 0:
-                    for q in e_quots:
-                        end_quotations[figi] = end_quotations[figi] + (mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
-                    end_quotations[figi] /= len(e_quots)
-                else:
-                    raise ValueError
+                    if len(e_quots) != 0:
+                        for q in e_quots:
+                            end_quotations[figi] = end_quotations[figi] + (mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
+                        end_quotations[figi] /= len(e_quots)
+                    if count >= 400:
+                        time.sleep(10)
+                        count = 0
+                    print(count)
+                except Exception as e:
+                    pass
+
         return (begin_quotations, end_quotations)
 
 
