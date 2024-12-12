@@ -1,23 +1,38 @@
 import time
 
-from AnalyzerDataTypes import *
+from Analyzer.AnalyzerDataTypes import *
 import pyxirr
 from collections import defaultdict
 import datetime
 import copy
 import pathlib
 import os
+import orjson
 
 
 def look_for_request():
     while(True):
         time.sleep(0.5)
-        if len(os.listdir('../../analyzer_requests')) != 0:
-            for p in pathlib.Path('../../analyzer_requests').iterdir():
-                with p.open() as f:
-                    req = from_dict(SharesPortfolioIntervalAnalyzerRequest, orjson.loads(f.read()))
-                    Analyzer(req, f.name.split("_")[3])
+        process_single_request()
+def process_single_request():
+    p = pathlib.Path.cwd()
+    p = p.parent / "analyzer_requests"
+    p.mkdir(exist_ok=True)
+    requests = [req for req in p.iterdir()]
+    if len(requests) != 0:
+        for p in requests:
+            name_parts = p.name.split("_")
+            if (name_parts[1] == "shares"):
+                req = from_dict(SharesPortfolioIntervalAnalyzerRequest, orjson.loads(p.read_bytes()))
+                print(p.name)
+                Analyzer(req, name_parts[2])
                 p.unlink()
+                return
+            if (name_parts[1] == "bonds"):
+                pass
+                #TODO
+            else:
+                continue
 
 class Analyzer:
     def __init__(self, request: AnalyzerRequest, req_name):
@@ -107,8 +122,15 @@ class Analyzer:
 
 
     def send_response(self):
-        with open("../../analyzer_responses/response_shares_" + self.req_name, "wb") as file:
-            file.write(orjson.dumps(SharesPortfolioIntervalAnalyzerResponse(**self.response_data)))
+        p = pathlib.Path.cwd()
+        p = p.parent / "analyzer_responses"
+        p.mkdir(exist_ok=True)
+        p = p / ("reponse_shares_" + self.req_name)
+        if isinstance(self.request, SharesPortfolioIntervalAnalyzerRequest):
+            res_type = SharesPortfolioIntervalAnalyzerResponse
+        else:
+            pass
+        p.write_bytes(orjson.dumps(res_type(**self.response_data)))
 
 
 if __name__ == '__main__':
