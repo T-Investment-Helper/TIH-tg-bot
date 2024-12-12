@@ -1,15 +1,13 @@
 import dataclasses
 import datetime
 import time
-
 import orjson
 import os
 import pathlib
 
-from source.Bot.encoder import token_encoder
 
 from tinkoff.invest import schemas, Client, OperationState, CandleInterval
-from source.Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
+from Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
                                          InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
                                          AnalyzerRequest, ConnectorRequest, from_dict)
 
@@ -45,7 +43,8 @@ class Connector:
             self.get_data_for_analyzer_request()
             self.make_analyzer_request(SharesPortfolioIntervalAnalyzerRequest)
             self.send_data_to_analyzer()
-        except:
+        except Exception as e:
+            print(e)
             self.make_error_response()
 
     def get_data_for_analyzer_request(self):
@@ -68,21 +67,20 @@ class Connector:
         self.analyzer_request = request_type(**self.data)
         #else: TODO
     def make_error_response(self):
-        with open("../../analyzer_responses/response_shares_" + self.req_name, "wb") as file:
-            file.write(b"")
+        p = pathlib.Path.cwd()
+        p = p.parent / "analyzer_responses"
+        p.mkdir(exist_ok=True)
+        p = p / ("response_shares_" + self.req_name)
+        p.touch(exist_ok=True)
+        p.write_bytes(b"")
 
     def send_data_to_analyzer(self):
-        # serialize
-        with open("../../analyzer_requests/request_shares_" + self.req_name, "wb") as file:
-            file.write(orjson.dumps(self.analyzer_request))
-
-        # return None
-        # a = orjson.dumps(self.analyzer_request)
-        #
-        # print(orjson.loads(a))
-        # b = from_dict(self.analyzer_request.__class__, orjson.loads(a))
-
-        # send json TODO
+        p = pathlib.Path.cwd()
+        p = p.parent / "analyzer_requests"
+        p.mkdir(exist_ok=True)
+        p = p / ("request_shares_" + self.req_name)
+        p.touch(exist_ok=True)
+        p.write_bytes(orjson.dumps(self.analyzer_request))
 
     def get_instrument_info(self, operation: schemas.Operation) -> tuple[str, str, str, str]:
         if operation.figi in self.figi_to_info:
@@ -170,22 +168,41 @@ class Connector:
                     continue
                 begin_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
                 end_quotations[figi] = MoneyValue(0, 0, Currency.RUB)
-                b_quots = [q for q in client.market_data.get_candles(from_=begin_date, to=begin_date + datetime.timedelta(10),
-                                                             interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                b_quots = [q for q in client.market_data.get_candles(
+                                                                     from_=begin_date - datetime.timedelta(1), to=begin_date,
+                                                                     interval=CandleInterval.CANDLE_INTERVAL_DAY,
                                                                      instrument_id=self.figi_to_info[figi][3]).candles]
-                e_quots = [q for q in client.market_data.get_candles(from_=end_date, to=end_date + datetime.timedelta(10),
-                                                             interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                while not b_quots:
+                    begin_date -= datetime.timedelta(1)
+                    b_quots = [q for q in client.market_data.get_candles(
+                                                              from_=begin_date - datetime.timedelta(1), to=begin_date,
+                                                              interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                              instrument_id=self.figi_to_info[figi][3]).candles]
+
+                e_quots = [q for q in client.market_data.get_candles(
+                                                                     from_=end_date - datetime.timedelta(1), to=end_date,
+                                                                     interval=CandleInterval.CANDLE_INTERVAL_DAY,
                                                                      instrument_id=self.figi_to_info[figi][3]).candles]
+                while not e_quots:
+                    end_date -= datetime.timedelta(1)
+                    e_quots = [q for q in client.market_data.get_candles(
+                                                              from_=end_date - datetime.timedelta(1), to=end_date,
+                                                              interval=CandleInterval.CANDLE_INTERVAL_DAY,
+                                                              instrument_id=self.figi_to_info[figi][3]).candles]
                 if len(b_quots) != 0:
                     for q in b_quots:
                         begin_quotations[figi] = begin_quotations[figi] + (
                                     mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
                     begin_quotations[figi] /= len(b_quots)
+                else:
+                    raise ValueError
 
                 if len(e_quots) != 0:
                     for q in e_quots:
                         end_quotations[figi] = end_quotations[figi] + (mv_from_t_api_quotation(q.low) + mv_from_t_api_quotation(q.high)) / 2
-                    end_quotations[figi] /= len(b_quots)
+                    end_quotations[figi] /= len(e_quots)
+                else:
+                    raise ValueError
         return (begin_quotations, end_quotations)
 
 
