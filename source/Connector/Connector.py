@@ -7,9 +7,14 @@ import pathlib
 
 
 from tinkoff.invest import schemas, Client, OperationState, CandleInterval, GetOperationsByCursorRequest
-from Analyzer.AnalyzerDataTypes import (InstrumentOperation, Currency, MoneyValue, OperationType,
-                                         InstrumentType, SharesPortfolioIntervalConnectorRequest, SharesPortfolioIntervalAnalyzerRequest,
-                                         AnalyzerRequest, ConnectorRequest, from_dict)
+from Analyzer.AnalyzerDataTypes import *
+
+
+conn_to_analyzer = {SharesPortfolioIntervalConnectorRequest : SharesPortfolioIntervalAnalyzerRequest,
+                    SingleBondExpectedProfitConnectorRequest : SingleBondExpectedProfitAnalyzerRequest,
+                    SingleShareAnalyzerRequest : SingleShareAnalyzerRequest,
+                    BondPortfolioProfitConnectorRequest : BondPortfolioProfitAnalyzerRequest,
+                    TokenValidationConnectorRequest : TokenValidationAnalyzerRequest}
 
 def mv_from_t_api_mv(mv: schemas.MoneyValue):
     return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency])
@@ -42,22 +47,23 @@ class Connector:
     def __init__(self, TOKEN: str, request: ConnectorRequest, req_name):
         self.req_name = req_name
         self.TOKEN: str = TOKEN
-        self.figi_to_info: dict[str, tuple[str, str, str, str]] = dict()
         self.conn_request: ConnectorRequest = request
-        self.analyzer_request: AnalyzerRequest = None
+        self.analyzer_request_type = conn_to_analyzer[self.conn_request.__class__]
+        self.analyzer_request: AnalyzerRequest
         self.data: dict = dict()
 
     def process_request(self):
         try:
             self.get_data_for_analyzer_request()
-            self.make_analyzer_request(SharesPortfolioIntervalAnalyzerRequest)
+            self.make_analyzer_request(self.analyzer_request_type)
             self.send_data_to_analyzer()
         except Exception as e:
-            print(e)
-            self.make_error_response()
+            self.make_error_response("")
 
     def get_data_for_analyzer_request(self):
         if isinstance(self.conn_request, SharesPortfolioIntervalConnectorRequest):
+            self.figi_to_info: dict[str, tuple[str, str, str, str]] = dict()
+
             operations = self.get_shares_operations_for_period(self.conn_request.end_date)
             quotations = self.get_shares_quotations_for_period(self.conn_request.begin_date,
                                                                self.conn_request.end_date,
@@ -69,20 +75,50 @@ class Connector:
             self.data["quotations_begin"] = quotations[0]
             self.data["quotations_end"] = quotations[1]
             SharesPortfolioIntervalAnalyzerRequest(**self.data)
+        elif isinstance(self.conn_request, SingleBondExpectedProfitConnectorRequest):
+            self.data["bond_info"] = self.get_bond_info(self.conn_request.ticker)
+            self.data["ticker"] = self.conn_request.ticker
 
+        elif isinstance(self.conn_request, TokenValidationConnectorRequest):
+            try:
+                with Client(self.conn_request.TOKEN) as client:
+                    if len(client.users.get_accounts().accounts) > 0:
+                        self.data["result"] = "VALID"
+                    else:
+                        self.data["result"] = "INVALID"
+            except Exception as e:
+                self.data["result"] = "INVALID"
+
+
+    def make_floating_coupon_response(self):
+        p = pathlib.Path.cwd()
+        p = p.parent / "analyzer_responses"
+        p.mkdir(exist_ok=True)
+        p = p / ("response_bond_expected_profit_" + self.req_name)
+        p.touch(exist_ok=True)
+        p.write_bytes(b"FLOATING")
     def make_analyzer_request(self, request_type: dataclasses.dataclass):
         self.analyzer_request = request_type(**self.data)
-    def make_error_response(self):
+    def make_error_response(self, resp: str):
         p = pathlib.Path.cwd()
         p = p.parent / "analyzer_responses"
         p.mkdir(exist_ok=True)
         if isinstance(self.analyzer_request, SharesPortfolioIntervalAnalyzerRequest):
             p = p / ("response_shares_" + self.req_name)
             p.touch(exist_ok=True)
-            p.write_bytes(b"")
-        else:
-            #TODO
-            pass
+            p.write_bytes(resp.encode())
+        elif isinstance(self.analyzer_request, SingleBondExpectedProfitAnalyzerRequest):
+            p = p / ("response_single_bond_expected_profit_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(resp.encode())
+        elif isinstance(self.analyzer_request, SingleShareAnalyzerRequest):
+            p = p / ("response_single_share_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(resp.encode())
+        elif isinstance(self.analyzer_request, BondPortfolioProfitAnalyzerRequest):
+            p = p / ("response_bond_portfolio_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(resp.encode())
 
     def send_data_to_analyzer(self):
         p = pathlib.Path.cwd()
@@ -92,9 +128,23 @@ class Connector:
             p = p / ("request_shares_" + self.req_name)
             p.touch(exist_ok=True)
             p.write_bytes(orjson.dumps(self.analyzer_request))
-        else:
-            pass
-            #TODO
+        elif isinstance(self.conn_request, TokenValidationConnectorRequest):
+            p = p.parent / "analyzer_responses"
+            p = p / ("response_token_validation_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(orjson.dumps(self.analyzer_request))
+        elif isinstance(self.conn_request, SingleShareIntervalConnectorRequest):
+            p = p / ("request_single_share_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(orjson.dumps(self.analyzer_request))
+        elif isinstance(self.conn_request, SingleBondExpectedProfitConnectorRequest):
+            p = p / ("request_single_bond_expected_profit_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(orjson.dumps(self.analyzer_request))
+        elif isinstance(self.conn_request, BondPortfolioProfitConnectorRequest):
+            p = p / ("request_bond_portfolio_" + self.req_name)
+            p.touch(exist_ok=True)
+            p.write_bytes(orjson.dumps(self.analyzer_request))
 
     def get_instrument_info(self, operation: schemas.OperationItem) -> tuple[str, str, str, str]:
         if operation.figi in self.figi_to_info:
@@ -125,6 +175,27 @@ class Connector:
                                    quantity=operation.quantity_done, currency=curr,
                                    price=MoneyValue(operation.price.units, operation.price.nano, curr),
                                    payment=MoneyValue(operation.payment.units, operation.payment.nano, curr))
+
+
+
+    def get_bond_info(self, ticker: str) -> BondInfo:
+        with Client(self.TOKEN) as client:
+            figi = client.instruments.find_instrument(query=ticker).instruments[0].figi
+            bond = client.instruments.bond_by(id=figi, id_type=schemas.InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI).instrument
+            quots = client.market_data.get_candles(figi=bond.figi, from_=datetime.datetime.now() - datetime.timedelta(1),
+                                                   to=datetime.datetime.now(), interval=CandleInterval.CANDLE_INTERVAL_DAY).candles
+            k = 1
+            while len(quots) == 0:
+                k += 1
+                quots = client.market_data.get_candles(figi=bond.figi, from_=datetime.datetime.now() - datetime.timedelta(1 * k), to=datetime.datetime.now(), interval=CandleInterval.CANDLE_INTERVAL_DAY).candles
+            price = MoneyValue(0, 0, Currency.NONE)
+            for q in quots:
+                price = price + (mv_from_t_api_quotation(q.high) + mv_from_t_api_quotation(q.low)) * (1 / 200)
+            price = price / len(quots)
+            coupons = dict([(str(c.coupon_date), c.pay_one_bond) for c in client.instruments.get_bond_coupons(figi=bond.figi, from_=datetime.datetime.today(), to=bond.maturity_date + datetime.timedelta(1)).events])
+
+        return BondInfo(ticker=ticker, coupons=coupons, price=price, nominal_value=bond.nominal, is_floating=bond.floating_coupon_flag)
+
 
 
     def get_shares_operations_for_period_without_cursor(self, currency: Currency,
