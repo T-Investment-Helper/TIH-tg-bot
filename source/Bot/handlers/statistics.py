@@ -17,7 +17,7 @@ from source.Analyzer.AnalyzerDataTypes import SharesPortfolioIntervalConnectorRe
 from source.Bot.request_former import form_request
 from source.Bot.result_former import form_result
 from source.Router.db_interaction import get_token_by_user_id
-from source.Bot.encoder import token_encoder
+from source.Encoder.encoder import token_encoder
 
 router = Router()
 
@@ -192,13 +192,13 @@ async def get_end_date(message: types.Message, state: FSMContext):
             request = await form_request(data["security_type"],
                                          datetime.date(data["start_year"], data["start_month"], data["start_date"]),
                                          datetime.date(data["end_year"], data["end_month"], data["end_date"]))
-            request.token_cypher = data["encoded_token"]
+            request.token = token_encoder.decode_token(data["encoded_token"])
             request_time_str = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-            request_file_name = f"request_shares_{hashlib.sha256((request.token_cypher+request_time_str).encode('utf-8')).hexdigest()}.json"
+            request_file_name = f"request_shares_{hashlib.sha256((request.token + request_time_str).encode('utf-8')).hexdigest()}.json"
             request_path = "../../connector_requests/" + request_file_name
             async with async_open(request_path, 'wb') as f:
                 await f.write(orjson.dumps(request))
-            response_file_name = f"response_shares_{hashlib.sha256((request.token_cypher + request_time_str).encode('utf-8')).hexdigest()}.json"
+            response_file_name = f"response_shares_{hashlib.sha256((request.token + request_time_str).encode('utf-8')).hexdigest()}.json"
             response_path = "../../analyzer_responses/" + response_file_name
             results = None
             total_sleep_time = 0
