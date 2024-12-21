@@ -6,7 +6,6 @@ from math import floor
 from typing import Self
 
 from tinkoff.invest import schemas
-import orjson
 
 #ВАЖНО!!! from_dict парсит ТОЛЬКО датаклассы со следующими ограничениями:
 
@@ -201,6 +200,15 @@ class InstrumentOperation:
     payment: MoneyValue
 
 
+@dataclasses.dataclass
+class BondInfo:
+    ticker: str
+    coupons: dict[datetime.datetime, MoneyValue]
+    price: MoneyValue
+    nominal_value: MoneyValue
+    is_floating: int
+
+
 
 @dataclasses.dataclass
 class ConnectorRequest:
@@ -210,16 +218,33 @@ class ConnectorRequest:
 class SharesPortfolioIntervalConnectorRequest(ConnectorRequest):
     begin_date: datetime.datetime
     end_date: datetime.datetime
-    token_cypher: str
+    token: str
     #account_ind: int - если реализовывать переключение между разными портфелями одного пользователя
 
-
+@dataclasses.dataclass
+class SingleShareIntervalConnectorRequest(ConnectorRequest):
+    begin_date: datetime.datetime
+    end_date: datetime.datetime
+    ticker: str
+    token: str
 
 
 
 @dataclasses.dataclass
-class AnalyzerRequest:
-    operations: tuple[InstrumentOperation]
+class BondPortfolioProfitConnectorRequest(ConnectorRequest):
+    ticker: str
+    token: str
+
+@dataclasses.dataclass
+class SingleBondExpectedProfitConnectorRequest(ConnectorRequest):
+    ticker: str
+    token: str
+
+@dataclasses.dataclass
+class TokenValidationConnectorRequest(ConnectorRequest):
+    token: str
+
+
 
 
 @dataclasses.dataclass
@@ -237,21 +262,54 @@ class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
 
 
 
-
-
+@dataclasses.dataclass
+class AnalyzerRequest:
+    pass
 
 
 @dataclasses.dataclass
 class SharesPortfolioIntervalAnalyzerRequest(AnalyzerRequest):
     begin_date: datetime.datetime
     end_date: datetime.datetime
-    operations: tuple[InstrumentOperation]
+    operations: tuple[InstrumentOperation, ...]
     # котировки акций - только для начального и конечного момента
     quotations_begin: dict[str, MoneyValue]
     quotations_end: dict[str, MoneyValue]
 
     # котировки валют - на момент ВСЕХ операций (для возможного перевода валют)
     # currency_quotations: dict[str, list[MoneyValue]]
+
+
+@dataclasses.dataclass
+class SingleShareAnalyzerRequest(AnalyzerRequest):
+    uid: str
+    figi: str
+    begin_date: datetime.datetime
+    end_date: datetime.datetime
+    operations: tuple[InstrumentOperation, ...]
+    quotations: dict[datetime.datetime, MoneyValue]
+    quotation_begin: tuple[datetime.datetime, MoneyValue]
+    quotation_end: tuple[datetime.datetime, MoneyValue]
+
+
+@dataclasses.dataclass
+class BondPortfolioProfitAnalyzerRequest(AnalyzerRequest):
+    ticker: str
+    operations: tuple[InstrumentOperation, ...]
+
+
+@dataclasses.dataclass
+class SingleBondExpectedProfitAnalyzerRequest(AnalyzerRequest):
+    ticker: str
+    bond_info: BondInfo
+
+@dataclasses.dataclass
+class TokenValidationAnalyzerRequest(AnalyzerRequest):
+    result: str
+
+
+class ConnectorExceptions(enum.Enum):
+    InvalidToken: Exception
 
 
 
