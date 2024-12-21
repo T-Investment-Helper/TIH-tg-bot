@@ -14,10 +14,10 @@ conn_to_analyzer = {SharesPortfolioIntervalConnectorRequest : SharesPortfolioInt
                     SingleBondExpectedProfitConnectorRequest : SingleBondExpectedProfitAnalyzerRequest,
                     SingleShareAnalyzerRequest : SingleShareAnalyzerRequest,
                     BondPortfolioProfitConnectorRequest : BondPortfolioProfitAnalyzerRequest,
-                    TokenValidationConnectorRequest : TokenValidationAnalyzerRequest}
+                    TokenValidationConnectorRequest : TokenValidationAnalyzerResponse}
 
 def mv_from_t_api_mv(mv: schemas.MoneyValue):
-    return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency])
+    return MoneyValue(units=mv.units, nano=mv.nano, curr=Currency[mv.currency.upper()])
 def mv_from_t_api_quotation(q: schemas.Quotation):
     return MoneyValue(units=q.units,  nano=q.nano, curr=Currency.RUB)
 
@@ -81,7 +81,7 @@ class Connector:
 
         elif isinstance(self.conn_request, TokenValidationConnectorRequest):
             try:
-                with Client(self.conn_request.TOKEN) as client:
+                with Client(self.conn_request.token) as client:
                     if len(client.users.get_accounts().accounts) > 0:
                         self.data["result"] = "VALID"
                     else:
@@ -103,19 +103,19 @@ class Connector:
         p = pathlib.Path.cwd()
         p = p.parent / "analyzer_responses"
         p.mkdir(exist_ok=True)
-        if isinstance(self.analyzer_request, SharesPortfolioIntervalAnalyzerRequest):
+        if self.analyzer_request_type == SharesPortfolioIntervalAnalyzerRequest:
             p = p / ("response_shares_" + self.req_name)
             p.touch(exist_ok=True)
             p.write_bytes(resp.encode())
-        elif isinstance(self.analyzer_request, SingleBondExpectedProfitAnalyzerRequest):
+        elif self.analyzer_request_type == SingleBondExpectedProfitAnalyzerRequest:
             p = p / ("response_single_bond_expected_profit_" + self.req_name)
             p.touch(exist_ok=True)
             p.write_bytes(resp.encode())
-        elif isinstance(self.analyzer_request, SingleShareAnalyzerRequest):
+        elif self.analyzer_request_type == SingleShareAnalyzerRequest:
             p = p / ("response_single_share_" + self.req_name)
             p.touch(exist_ok=True)
             p.write_bytes(resp.encode())
-        elif isinstance(self.analyzer_request, BondPortfolioProfitAnalyzerRequest):
+        elif self.analyzer_request== BondPortfolioProfitAnalyzerRequest:
             p = p / ("response_bond_portfolio_" + self.req_name)
             p.touch(exist_ok=True)
             p.write_bytes(resp.encode())
@@ -194,7 +194,8 @@ class Connector:
             price = price / len(quots)
             coupons = dict([(str(c.coupon_date), c.pay_one_bond) for c in client.instruments.get_bond_coupons(figi=bond.figi, from_=datetime.datetime.today(), to=bond.maturity_date + datetime.timedelta(1)).events])
 
-        return BondInfo(ticker=ticker, coupons=coupons, price=price, nominal_value=bond.nominal, is_floating=bond.floating_coupon_flag)
+        return BondInfo(ticker=ticker, coupons=coupons, price=price, nominal_value=bond.nominal,
+                        is_floating=bond.floating_coupon_flag, aci_value=mv_from_t_api_mv(bond.aci_value), maturity_date=bond.maturity_date)
 
 
 

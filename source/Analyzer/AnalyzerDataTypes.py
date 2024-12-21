@@ -203,10 +203,12 @@ class InstrumentOperation:
 @dataclasses.dataclass
 class BondInfo:
     ticker: str
-    coupons: dict[datetime.datetime, MoneyValue]
+    coupons: dict[str, MoneyValue]
     price: MoneyValue
     nominal_value: MoneyValue
     is_floating: int
+    aci_value: MoneyValue
+    maturity_date: datetime.datetime
 
 
 
@@ -263,13 +265,13 @@ class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
 @dataclasses.dataclass
 class SingleBondExpectedProfitAnalyzerResponse(AnalyzerResponse):
     profit: MoneyValue
-    time_until_maturity: datetime.timedelta
+    maturity_date: datetime.datetime
 
 @dataclasses.dataclass
 class BondPortfolioProfitAnalyzerResponse(AnalyzerResponse):
     profit: MoneyValue
     revenue: MoneyValue
-    time_until_maturity: datetime.timedelta
+    maturity_date: datetime.datetime
 
 @dataclasses.dataclass
 class SingleShareAnalyzerResponse(AnalyzerResponse):
