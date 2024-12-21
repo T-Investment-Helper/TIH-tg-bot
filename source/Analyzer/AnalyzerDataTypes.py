@@ -260,6 +260,25 @@ class SharesPortfolioIntervalAnalyzerResponse(AnalyzerResponse):
     shares_grew: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
     shares_fell: list[str] #только те, который были и в НАЧАЛЕ, и в КОНЦЕ!
 
+@dataclasses.dataclass
+class SingleBondExpectedProfitAnalyzerResponse(AnalyzerResponse):
+    profit: MoneyValue
+    time_until_maturity: datetime.timedelta
+
+@dataclasses.dataclass
+class BondPortfolioProfitAnalyzerResponse(AnalyzerResponse):
+    profit: MoneyValue
+    revenue: MoneyValue
+    time_until_maturity: datetime.timedelta
+
+@dataclasses.dataclass
+class SingleShareAnalyzerResponse(AnalyzerResponse):
+    pass
+
+
+@dataclasses.dataclass
+class TokenValidationAnalyzerResponse(AnalyzerResponse):
+    result: str
 
 
 @dataclasses.dataclass
@@ -302,10 +321,6 @@ class BondPortfolioProfitAnalyzerRequest(AnalyzerRequest):
 class SingleBondExpectedProfitAnalyzerRequest(AnalyzerRequest):
     ticker: str
     bond_info: BondInfo
-
-@dataclasses.dataclass
-class TokenValidationAnalyzerRequest(AnalyzerRequest):
-    result: str
 
 
 class ConnectorExceptions(enum.Enum):
